@@ -109,7 +109,7 @@ export const useAuthStore = create<AuthState>((set, get) => ({
   loginWithOAuth: async (provider: 'google' | 'github' | 'azure') => {
     set({ isLoading: true, error: null });
     try {
-      const redirectUrl = `${window.location.origin}/auth/callback`;
+      const redirectUrl = `${window.location.origin}/oauth/callback`;
       const { error } = await supabase.auth.signInWithOAuth({
         provider,
         options: {
