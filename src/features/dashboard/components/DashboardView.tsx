@@ -1,4 +1,4 @@
-import React from 'react';
+import React, { useState } from 'react';
 import { 
   RiCalendarEventLine, 
   RiSparklingFill, 
@@ -15,8 +15,11 @@ import { Card, CardContent, CardHeader, CardTitle, CardDescription } from '@/com
 import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
 import { Link } from 'react-router-dom';
+import { UploadTranscriptModal } from '@/features/transcripts/components/UploadTranscriptModal';
 
 export const DashboardView: React.FC = () => {
+  const [isUploadModalOpen, setIsUploadModalOpen] = useState(false);
+
   const metrics = [
     { 
       label: 'Total Ingested Meetings', 
@@ -105,7 +108,12 @@ export const DashboardView: React.FC = () => {
             <RiFileTextLine className="h-3.5 w-3.5 mr-1.5" />
             Executive Digest
           </Button>
-          <Button variant="default" size="sm" className="h-8 text-xs">
+          <Button 
+            onClick={() => setIsUploadModalOpen(true)} 
+            variant="default" 
+            size="sm" 
+            className="h-8 text-xs cursor-pointer shadow-xs"
+          >
             <RiUploadCloud2Line className="h-3.5 w-3.5 mr-1.5" />
             Ingest Transcript
           </Button>
@@ -234,6 +242,11 @@ export const DashboardView: React.FC = () => {
           </Card>
         </div>
       </div>
+
+      <UploadTranscriptModal
+        isOpen={isUploadModalOpen}
+        onClose={() => setIsUploadModalOpen(false)}
+      />
     </div>
   );
 };
