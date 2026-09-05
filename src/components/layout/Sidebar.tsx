@@ -1,4 +1,4 @@
-import React from 'react';
+import React, { useState } from 'react';
 import { NavLink } from 'react-router-dom';
 import { 
   RiSparklingFill, 
@@ -14,8 +14,11 @@ import {
 } from 'react-icons/ri';
 import { cn } from '@/lib/utils';
 import { Button } from '@/components/ui/button';
+import { UploadTranscriptModal } from '@/features/transcripts/components/UploadTranscriptModal';
 
 export const Sidebar: React.FC = () => {
+  const [isUploadModalOpen, setIsUploadModalOpen] = useState(false);
+
   const mainNav = [
     { label: 'Dashboard', icon: RiDashboard3Line, href: '/' },
     { label: 'Meetings', icon: RiCalendarEventLine, href: '/meetings', badge: '3' },
@@ -49,7 +52,8 @@ export const Sidebar: React.FC = () => {
 
         {/* Quick Ingestion Action */}
         <Button 
-          className="w-full h-8 text-xs font-medium justify-center shadow-xs"
+          onClick={() => setIsUploadModalOpen(true)}
+          className="w-full h-8 text-xs font-medium justify-center shadow-xs cursor-pointer"
           variant="default"
         >
           <RiUploadCloud2Line className="h-3.5 w-3.5 mr-1.5" />
@@ -143,6 +147,11 @@ export const Sidebar: React.FC = () => {
           <span className="text-[10px] text-muted-foreground font-mono">v1.0</span>
         </div>
       </div>
+
+      <UploadTranscriptModal
+        isOpen={isUploadModalOpen}
+        onClose={() => setIsUploadModalOpen(false)}
+      />
     </aside>
   );
 };
