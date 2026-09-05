@@ -11,6 +11,8 @@ import { LoginForm } from '@/features/auth/components/LoginForm';
 import { RegisterForm } from '@/features/auth/components/RegisterForm';
 import { AuthCallback } from '@/features/auth/components/AuthCallback';
 import { AuthGuard } from '@/features/auth/components/AuthGuard';
+import { IntegrationsView } from '@/features/integrations/components/IntegrationsView';
+import { GoogleCallbackView } from '@/features/integrations/components/GoogleCallbackView';
 
 export const router = createBrowserRouter([
   {
@@ -28,6 +30,14 @@ export const router = createBrowserRouter([
   {
     path: '/auth/callback',
     element: <AuthCallback />,
+  },
+  {
+    path: '/integrations/google/callback',
+    element: (
+      <AuthGuard>
+        <GoogleCallbackView />
+      </AuthGuard>
+    ),
   },
   {
     path: '/',
@@ -56,6 +66,10 @@ export const router = createBrowserRouter([
       {
         path: 'action-items',
         element: <ActionItemsView />,
+      },
+      {
+        path: 'integrations',
+        element: <IntegrationsView />,
       },
       {
         path: 'knowledge',
