@@ -7,10 +7,31 @@ import { IntelligenceViewer } from '@/features/intelligence/components/Intellige
 import { CalendarView } from '@/features/calendar/components/CalendarView';
 import { ActionItemsView } from '@/features/action-items/components/ActionItemsView';
 
+import { LoginForm } from '@/features/auth/components/LoginForm';
+import { RegisterForm } from '@/features/auth/components/RegisterForm';
+import { AuthCallback } from '@/features/auth/components/AuthCallback';
+import { AuthGuard } from '@/features/auth/components/AuthGuard';
+
 export const router = createBrowserRouter([
   {
+    path: '/login',
+    element: <LoginForm />,
+  },
+  {
+    path: '/register',
+    element: <RegisterForm />,
+  },
+  {
+    path: '/auth/callback',
+    element: <AuthCallback />,
+  },
+  {
     path: '/',
-    element: <AppLayout />,
+    element: (
+      <AuthGuard>
+        <AppLayout />
+      </AuthGuard>
+    ),
     children: [
       {
         index: true,
