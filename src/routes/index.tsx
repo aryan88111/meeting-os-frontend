@@ -22,6 +22,10 @@ export const router = createBrowserRouter([
     element: <RegisterForm />,
   },
   {
+    path: '/oauth/callback',
+    element: <AuthCallback />,
+  },
+  {
     path: '/auth/callback',
     element: <AuthCallback />,
   },
