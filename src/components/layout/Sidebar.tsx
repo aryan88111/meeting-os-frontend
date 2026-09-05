@@ -4,6 +4,7 @@ import {
   RiSparklingFill, 
   RiDashboard3Line, 
   RiCalendarEventLine, 
+  RiCalendar2Line,
   RiCheckboxCircleLine, 
   RiBrainLine, 
   RiFileTextLine, 
@@ -18,7 +19,8 @@ export const Sidebar: React.FC = () => {
   const mainNav = [
     { label: 'Dashboard', icon: RiDashboard3Line, href: '/' },
     { label: 'Meetings', icon: RiCalendarEventLine, href: '/meetings', badge: '3' },
-    { label: 'Action Items', icon: RiCheckboxCircleLine, href: '/action-items', badge: '12' },
+    { label: 'Calendar & To-Do', icon: RiCalendar2Line, href: '/calendar' },
+    { label: 'Action Items', icon: RiCheckboxCircleLine, href: '/action-items', badge: '5' },
   ];
 
   const knowledgeNav = [
