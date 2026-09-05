@@ -1,0 +1,12 @@
+node_modules
+dist
+dist-ssr
+.vite
+*.log
+npm-debug.log*
+.DS_Store
+.git
+.github
+.vscode
+.env*
+!.env.example
