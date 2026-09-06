@@ -32,7 +32,7 @@ interface Citation {
   timestampStartMs?: number;
   timestampFormatted?: string;
   snippet: string;
-  type: 'DECISION' | 'ACTION_ITEM' | 'TRANSCRIPT' | 'SUMMARY' | 'TOPIC';
+  type: 'DECISION' | 'ACTION_ITEM' | 'TRANSCRIPT' | 'SUMMARY' | 'TOPIC' | 'RISK' | 'OPEN_QUESTION';
 }
 
 interface Message {
