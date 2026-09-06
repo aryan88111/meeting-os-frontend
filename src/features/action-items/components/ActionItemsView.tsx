@@ -2,13 +2,14 @@ import React, { useState } from 'react';
 import { 
   RiCheckboxCircleLine, 
   RiCheckboxBlankCircleLine, 
-  RiFilter3Line, 
   RiSearch2Line, 
   RiSparklingFill, 
   RiTimeLine, 
   RiUser3Line, 
   RiArrowRightUpLine, 
-  RiCheckDoubleLine 
+  RiCheckDoubleLine,
+  RiLoader4Line,
+  RiInboxLine
 } from 'react-icons/ri';
 import { Card } from '@/components/ui/card';
 import { Badge } from '@/components/ui/badge';
@@ -17,100 +18,73 @@ import { Input } from '@/components/ui/input';
 import { Tabs, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import { cn } from '@/lib/utils';
 import { Link } from 'react-router-dom';
+import { useMeetingsQuery } from '@/features/meetings/hooks/useMeetings';
 
-interface ActionItem {
+interface FlatActionItem {
   id: string;
   title: string;
   meetingId: string;
   meetingTitle: string;
   assignee: string;
-  deadline: string;
-  priority: 'URGENT' | 'HIGH' | 'MEDIUM' | 'LOW';
-  status: 'PENDING' | 'IN_PROGRESS' | 'COMPLETED';
-  citation: string;
+  deadline?: string;
+  priority: string;
+  status: string;
+  citation?: string;
 }
 
 export const ActionItemsView: React.FC = () => {
   const [filterStatus, setFilterStatus] = useState<string>('all');
   const [searchQuery, setSearchQuery] = useState<string>('');
+  const [localStatusOverrides, setLocalStatusOverrides] = useState<Record<string, string>>({});
 
-  const [items, setItems] = useState<ActionItem[]>([
-    {
-      id: 'a1',
-      title: 'Configure RabbitMQ retry exchange & DLQ dead-letter queue',
-      meetingId: '1',
-      meetingTitle: 'Q3 Product Architecture & Sprint Kickoff',
-      assignee: 'Aryan Gautam',
-      deadline: 'Sep 12, 2026',
-      priority: 'URGENT',
-      status: 'IN_PROGRESS',
-      citation: '00:14:20 - 00:15:02 (Speaker: Aryan)',
-    },
-    {
-      id: 'a2',
-      title: 'Implement Hey API client generation pipeline in React SPA',
-      meetingId: '1',
-      meetingTitle: 'Q3 Product Architecture & Sprint Kickoff',
-      assignee: 'Aryan Gautam',
-      deadline: 'Sep 10, 2026',
-      priority: 'HIGH',
-      status: 'COMPLETED',
-      citation: '00:22:15 - 00:23:00 (Speaker: Aryan)',
-    },
-    {
-      id: 'a3',
-      title: 'Validate Google Meet OAuth refresh token lifecycle and tenant scopes',
-      meetingId: '3',
-      meetingTitle: 'Enterprise Customer Success Review',
-      assignee: 'David K.',
-      deadline: 'Sep 14, 2026',
-      priority: 'HIGH',
-      status: 'PENDING',
-      citation: '00:44:00 - 00:45:12 (Speaker: David K.)',
-    },
-    {
-      id: 'a4',
-      title: 'Design multi-tenant organization switching modal and RBAC guards',
-      meetingId: '1',
-      meetingTitle: 'Q3 Product Architecture & Sprint Kickoff',
-      assignee: 'Sarah Chen',
-      deadline: 'Sep 15, 2026',
-      priority: 'MEDIUM',
-      status: 'PENDING',
-      citation: '00:31:10 - 00:31:45 (Speaker: Sarah Chen)',
-    },
-    {
-      id: 'a5',
-      title: 'Audit pgvector distance metrics and benchmark HNSW vs IVFFlat index',
-      meetingId: '2',
-      meetingTitle: 'Engineering Backend Sync — Database Indexing',
-      assignee: 'Aryan Gautam',
-      deadline: 'Sep 18, 2026',
-      priority: 'LOW',
-      status: 'PENDING',
-      citation: '00:18:30 - 00:19:10 (Speaker: Aryan)',
-    },
-  ]);
+  const { data: meetingsData, isLoading } = useMeetingsQuery({ limit: 100 });
+  const meetings = meetingsData?.items || [];
 
-  const toggleComplete = (id: string) => {
-    setItems((prev) =>
-      prev.map((item) =>
-        item.id === id
-          ? {
-              ...item,
-              status: item.status === 'COMPLETED' ? 'PENDING' : 'COMPLETED',
-            }
-          : item
-      )
-    );
+  // Flatten action items across all meetings
+  const allItems: FlatActionItem[] = [];
+  meetings.forEach((m) => {
+    (m.actionItems as any[])?.forEach((a) => {
+      let citation = '';
+      if (a.sourceSegment) {
+        const startSec = a.sourceSegment.startTimeMs ? Math.floor(Number(a.sourceSegment.startTimeMs) / 1000) : 0;
+        const mins = Math.floor(startSec / 60);
+        const secs = startSec % 60;
+        const timeStr = `${String(mins).padStart(2, '0')}:${String(secs).padStart(2, '0')}`;
+        citation = `[${timeStr}] ${a.sourceSegment.speakerName || 'Speaker'}`;
+      }
+
+      allItems.push({
+        id: a.id,
+        title: a.description || a.task || 'Action task',
+        meetingId: m.id,
+        meetingTitle: m.title,
+        assignee: a.assignee?.name || a.assigneeName || 'Unassigned',
+        deadline: a.deadline ? new Date(a.deadline).toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' }) : undefined,
+        priority: a.priority || 'MEDIUM',
+        status: localStatusOverrides[a.id] || a.status || 'PENDING',
+        citation,
+      });
+    });
+  });
+
+  const toggleComplete = (id: string, currentStatus: string) => {
+    const nextStatus = currentStatus === 'COMPLETED' ? 'PENDING' : 'COMPLETED';
+    setLocalStatusOverrides((prev) => ({
+      ...prev,
+      [id]: nextStatus,
+    }));
   };
 
-  const filteredItems = items.filter((item) => {
+  const filteredItems = allItems.filter((item) => {
+    const isCompleted = item.status === 'COMPLETED';
+    const isPending = item.status === 'PENDING';
+    const isInProgress = item.status === 'IN_PROGRESS';
+
     const matchesStatus =
       filterStatus === 'all' ||
-      (filterStatus === 'pending' && item.status === 'PENDING') ||
-      (filterStatus === 'in_progress' && item.status === 'IN_PROGRESS') ||
-      (filterStatus === 'completed' && item.status === 'COMPLETED');
+      (filterStatus === 'pending' && isPending) ||
+      (filterStatus === 'in_progress' && isInProgress) ||
+      (filterStatus === 'completed' && isCompleted);
 
     const matchesSearch =
       item.title.toLowerCase().includes(searchQuery.toLowerCase()) ||
@@ -120,18 +94,21 @@ export const ActionItemsView: React.FC = () => {
     return matchesStatus && matchesSearch;
   });
 
-  const getPriorityBadge = (priority: ActionItem['priority']) => {
+  const getPriorityBadge = (priority: string) => {
     switch (priority) {
       case 'URGENT':
-        return <Badge variant="destructive" className="text-[10px] py-0">URGENT</Badge>;
+        return <Badge variant="destructive" className="text-[10px] py-0 font-mono">URGENT</Badge>;
       case 'HIGH':
-        return <Badge variant="warning" className="text-[10px] py-0">HIGH</Badge>;
+        return <Badge variant="warning" className="text-[10px] py-0 font-mono">HIGH</Badge>;
       case 'MEDIUM':
-        return <Badge variant="info" className="text-[10px] py-0">MEDIUM</Badge>;
+        return <Badge variant="info" className="text-[10px] py-0 font-mono">MEDIUM</Badge>;
       case 'LOW':
-        return <Badge variant="secondary" className="text-[10px] py-0">LOW</Badge>;
+      default:
+        return <Badge variant="secondary" className="text-[10px] py-0 font-mono">LOW</Badge>;
     }
   };
+
+  const pendingCount = allItems.filter((i) => i.status !== 'COMPLETED').length;
 
   return (
     <div className="space-y-6 animate-in fade-in duration-300">
@@ -140,14 +117,14 @@ export const ActionItemsView: React.FC = () => {
         <div>
           <h1 className="text-xl font-bold tracking-tight text-foreground flex items-center gap-2">
             <RiCheckDoubleLine className="h-5 w-5 text-primary" />
-            Action Items & Task Tracker
+            Action Items &amp; Task Tracker
           </h1>
           <p className="text-xs text-muted-foreground mt-0.5">
             Every task is automatically grounded with speaker timestamps from meeting transcripts.
           </p>
         </div>
         <Badge variant="secondary" className="text-xs py-1 px-3">
-          {items.filter((i) => i.status !== 'COMPLETED').length} Pending Tasks
+          {pendingCount} Pending Tasks
         </Badge>
       </div>
 
@@ -155,7 +132,7 @@ export const ActionItemsView: React.FC = () => {
       <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3">
         <Tabs value={filterStatus} onValueChange={setFilterStatus} className="w-full sm:w-auto">
           <TabsList className="bg-muted/50 p-1 border border-border">
-            <TabsTrigger value="all" className="text-xs">All Tasks ({items.length})</TabsTrigger>
+            <TabsTrigger value="all" className="text-xs">All Tasks ({allItems.length})</TabsTrigger>
             <TabsTrigger value="pending" className="text-xs">Pending</TabsTrigger>
             <TabsTrigger value="in_progress" className="text-xs">In Progress</TabsTrigger>
             <TabsTrigger value="completed" className="text-xs">Completed</TabsTrigger>
@@ -175,13 +152,26 @@ export const ActionItemsView: React.FC = () => {
 
       {/* Action Items List */}
       <Card className="p-0 overflow-hidden shadow-xs border-border">
-        <div className="divide-y divide-border">
-          {filteredItems.length === 0 ? (
-            <div className="p-8 text-center text-xs text-muted-foreground">
-              No action items found matching your filters.
+        {isLoading ? (
+          <div className="p-12 text-center flex flex-col items-center justify-center gap-3">
+            <RiLoader4Line className="h-6 w-6 animate-spin text-primary" />
+            <span className="text-xs text-muted-foreground">Loading action items across meetings...</span>
+          </div>
+        ) : filteredItems.length === 0 ? (
+          <div className="p-12 text-center flex flex-col items-center justify-center gap-3">
+            <RiInboxLine className="h-8 w-8 text-muted-foreground" />
+            <div className="space-y-1">
+              <p className="text-xs font-medium text-foreground">No action items found</p>
+              <p className="text-[11px] text-muted-foreground">
+                {allItems.length === 0 
+                  ? 'No action items extracted yet. Ingest a meeting transcript to extract tasks.' 
+                  : 'No tasks match your current filters.'}
+              </p>
             </div>
-          ) : (
-            filteredItems.map((item) => {
+          </div>
+        ) : (
+          <div className="divide-y divide-border">
+            {filteredItems.map((item) => {
               const isDone = item.status === 'COMPLETED';
               return (
                 <div
@@ -194,8 +184,9 @@ export const ActionItemsView: React.FC = () => {
                   <div className="flex items-start gap-3 flex-1">
                     <button
                       type="button"
-                      onClick={() => toggleComplete(item.id)}
-                      className="mt-0.5 text-primary hover:scale-110 transition-transform shrink-0"
+                      onClick={() => toggleComplete(item.id, item.status)}
+                      className="mt-0.5 text-primary hover:scale-110 transition-transform shrink-0 cursor-pointer"
+                      title={isDone ? 'Mark pending' : 'Mark completed'}
                     >
                       {isDone ? (
                         <RiCheckboxCircleLine className="h-5 w-5 text-emerald-500" />
@@ -222,11 +213,15 @@ export const ActionItemsView: React.FC = () => {
                           <RiUser3Line className="h-3 w-3 text-muted-foreground" />
                           {item.assignee}
                         </span>
-                        <span>•</span>
-                        <span className="flex items-center gap-1">
-                          <RiTimeLine className="h-3 w-3" />
-                          Due: <strong>{item.deadline}</strong>
-                        </span>
+                        {item.deadline && (
+                          <>
+                            <span>•</span>
+                            <span className="flex items-center gap-1">
+                              <RiTimeLine className="h-3 w-3" />
+                              Due: <strong>{item.deadline}</strong>
+                            </span>
+                          </>
+                        )}
                         <span>•</span>
                         <Link
                           to={`/meetings/${item.meetingId}`}
@@ -236,10 +231,12 @@ export const ActionItemsView: React.FC = () => {
                         </Link>
                       </div>
 
-                      <div className="pt-1.5 flex items-center gap-1 text-[10px] text-muted-foreground font-mono">
-                        <RiSparklingFill className="h-3 w-3 text-primary shrink-0" />
-                        <span>Source Citation: {item.citation}</span>
-                      </div>
+                      {item.citation && (
+                        <div className="pt-1 flex items-center gap-1 text-[10px] text-muted-foreground font-mono">
+                          <RiSparklingFill className="h-3 w-3 text-primary shrink-0" />
+                          <span>Source Citation: {item.citation}</span>
+                        </div>
+                      )}
                     </div>
                   </div>
 
@@ -253,9 +250,9 @@ export const ActionItemsView: React.FC = () => {
                   </div>
                 </div>
               );
-            })
-          )}
-        </div>
+            })}
+          </div>
+        )}
       </Card>
     </div>
   );

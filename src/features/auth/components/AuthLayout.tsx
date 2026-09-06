@@ -35,7 +35,7 @@ export const AuthLayout: React.FC<AuthLayoutProps> = ({ children, title, subtitl
             Turn every conversation into structured, searchable execution.
           </h1>
           <p className="text-muted-foreground text-sm leading-relaxed">
-            Automated transcripts, executive summaries, decision trackers, and pgvector semantic search across all your enterprise meetings.
+            Automated transcripts, executive summaries, decision trackers, and intelligent semantic search across all your enterprise meetings.
           </p>
 
           <div className="grid grid-cols-2 gap-4 pt-4">
