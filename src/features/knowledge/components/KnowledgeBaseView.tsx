@@ -24,6 +24,7 @@ import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
 import { Link } from 'react-router-dom';
 import { apiClient } from '@/api';
+import { MarkdownRenderer } from '@/components/ui/MarkdownRenderer';
 
 interface Citation {
   meetingId: string;
@@ -32,7 +33,7 @@ interface Citation {
   timestampStartMs?: number;
   timestampFormatted?: string;
   snippet: string;
-  type: 'DECISION' | 'ACTION_ITEM' | 'TRANSCRIPT' | 'SUMMARY' | 'TOPIC';
+  type: 'DECISION' | 'ACTION_ITEM' | 'TRANSCRIPT' | 'SUMMARY' | 'TOPIC' | 'RISK' | 'OPEN_QUESTION';
 }
 
 interface Message {
@@ -57,101 +58,7 @@ interface ChatSessionItem {
   _count?: { messages: number };
 }
 
-/**
- * Parses inline markdown: **bold**, `code`, *italic*
- */
-function renderFormattedInline(text: string): React.ReactNode[] {
-  const tokenRegex = /(`[^`]+`|\*\*[^*]+\*\*|\*[^*]+\*)/g;
-  const parts = text.split(tokenRegex);
 
-  return parts.map((part, i) => {
-    if (!part) return null;
-    if (part.startsWith('`') && part.endsWith('`') && part.length > 1) {
-      return (
-        <code
-          key={i}
-          className="inline-block px-1.5 py-0.5 mx-0.5 rounded text-[12px] font-mono bg-muted text-foreground border border-border font-medium"
-        >
-          {part.slice(1, -1)}
-        </code>
-      );
-    }
-    if (part.startsWith('**') && part.endsWith('**') && part.length > 3) {
-      return (
-        <strong key={i} className="font-semibold text-foreground">
-          {part.slice(2, -2)}
-        </strong>
-      );
-    }
-    if (part.startsWith('*') && part.endsWith('*') && part.length > 2) {
-      return (
-        <em key={i} className="italic text-muted-foreground">
-          {part.slice(1, -1)}
-        </em>
-      );
-    }
-    return <span key={i}>{part}</span>;
-  });
-}
-
-/**
- * Clean editorial assistant text with headings, lists, paragraphs
- */
-const FormattedAssistantMessage: React.FC<{ content: string }> = ({ content }) => {
-  if (!content) return null;
-
-  const sections = content.split(/\n\s*\n/).filter(Boolean);
-
-  return (
-    <div className="space-y-4 text-[13px] text-foreground/90 leading-relaxed font-normal">
-      {sections.map((sec, idx) => {
-        const trimmed = sec.trim();
-
-        // Heading 3: ### Title
-        if (trimmed.startsWith('### ')) {
-          return (
-            <h4 key={idx} className="text-xs font-bold uppercase tracking-wider text-primary pt-2">
-              {trimmed.replace(/^###\s+/, '')}
-            </h4>
-          );
-        }
-
-        // Heading 2: ## Title
-        if (trimmed.startsWith('## ')) {
-          return (
-            <h3 key={idx} className="text-sm font-bold text-foreground pt-2">
-              {trimmed.replace(/^##\s+/, '')}
-            </h3>
-          );
-        }
-
-        // Bullet List (- or *)
-        if (trimmed.startsWith('- ') || trimmed.startsWith('* ')) {
-          const items = trimmed.split(/\n[-*]\s+/).filter(Boolean);
-          return (
-            <ul key={idx} className="space-y-2 list-none pl-1">
-              {items.map((item, itemIdx) => (
-                <li key={itemIdx} className="flex items-start gap-2.5">
-                  <span className="w-1.5 h-1.5 rounded-full bg-primary/70 mt-2 shrink-0" />
-                  <span className="flex-1 leading-relaxed">
-                    {renderFormattedInline(item.replace(/^[-*]\s+/, '').trim())}
-                  </span>
-                </li>
-              ))}
-            </ul>
-          );
-        }
-
-        // Standard Paragraph
-        return (
-          <p key={idx} className="leading-relaxed">
-            {renderFormattedInline(trimmed)}
-          </p>
-        );
-      })}
-    </div>
-  );
-};
 
 /**
  * Collapsible Grounding Evidence Citations Dropdown (Ultra-Compact & Theme Variable Compliant)
@@ -621,7 +528,7 @@ export const KnowledgeBaseView: React.FC = () => {
                         {msg.content}
                       </div>
                     ) : (
-                      <FormattedAssistantMessage content={msg.content} />
+                      <MarkdownRenderer content={msg.content} />
                     )}
 
                     {/* Grounding Citations Dropdown */}
