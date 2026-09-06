@@ -5,6 +5,14 @@ import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
 import { Tabs, TabsList, TabsTrigger, TabsContent } from '@/components/ui/tabs';
 import {
+  DropdownMenu,
+  DropdownMenuTrigger,
+  DropdownMenuContent,
+  DropdownMenuItem,
+  DropdownMenuSeparator,
+  DropdownMenuLabel,
+} from '@/components/ui/dropdown-menu';
+import {
   RiSparklingFill,
   RiTimeLine,
   RiShareForwardLine,
@@ -27,12 +35,23 @@ import {
   RiTeamLine,
   RiVideoChatLine,
   RiFileCopyLine,
+  RiDownload2Line,
+  RiArrowDownSLine,
+  RiMore2Fill,
+  RiMarkdownLine,
+  RiCalendarLine,
+  RiShieldCheckLine,
 } from 'react-icons/ri';
 import { FcGoogle } from 'react-icons/fc';
 import { SiZoom } from 'react-icons/si';
 import { UploadTranscriptModal } from '@/features/transcripts/components/UploadTranscriptModal';
 import { DeleteMeetingModal } from '@/features/meetings/components/DeleteMeetingModal';
-import { meetingsControllerGetMeeting, integrationsControllerSyncGoogleMeetTranscript } from '@/api';
+import { FormattedDiscussion } from './FormattedDiscussion';
+import {
+  meetingsControllerGetMeeting,
+  integrationsControllerSyncGoogleMeetTranscript,
+  documentsControllerExportDocument,
+} from '@/api';
 
 interface Participant {
   id: string;
@@ -42,8 +61,17 @@ interface Participant {
   isExternal?: boolean;
 }
 
+interface Topic {
+  id: string;
+  title: string;
+  summary: string;
+  importance?: number;
+}
+
 interface Summary {
   id: string;
+  executiveSummary?: string;
+  summary?: string;
   overview?: string;
   keyTakeaways?: string[];
   actionPlan?: string;
@@ -54,33 +82,45 @@ interface Decision {
   id: string;
   topic?: string;
   decision: string;
+  context?: string;
   rationale?: string;
+  confidence?: number;
   confidenceScore?: number;
   speakerName?: string;
+  sourceSegmentId?: string;
   timestampStartMs?: number | bigint;
 }
 
 interface ActionItem {
   id: string;
-  task: string;
+  task?: string;
   description?: string;
+  assigneeName?: string;
   assignee?: { id: string; name: string; email?: string };
   priority: 'LOW' | 'MEDIUM' | 'HIGH' | 'URGENT';
   status: 'PENDING' | 'IN_PROGRESS' | 'COMPLETED' | 'CANCELLED';
+  deadline?: string;
   dueDate?: string;
+  sourceSegmentId?: string;
 }
 
 interface Risk {
   id: string;
-  risk: string;
-  severity: 'LOW' | 'MEDIUM' | 'HIGH' | 'CRITICAL';
+  risk?: string;
+  description?: string;
+  severity: 'LOW' | 'MEDIUM' | 'HIGH' | 'CRITICAL' | 'URGENT';
   mitigation?: string;
+  confidence?: number;
+  sourceSegmentId?: string;
 }
 
 interface OpenQuestion {
   id: string;
   question: string;
-  status: string;
+  assignedTo?: string;
+  owner?: string;
+  status?: string;
+  sourceSegmentId?: string;
 }
 
 interface TranscriptSegment {
@@ -114,12 +154,36 @@ interface MeetingDetails {
   createdAt: string;
   participants: Participant[];
   summaries: Summary[];
+  topics?: Topic[];
   decisions: Decision[];
   actionItems: ActionItem[];
   risks: Risk[];
   openQuestions: OpenQuestion[];
   transcripts: Transcript[];
 }
+
+const SPEAKER_COLORS = [
+  'bg-indigo-500/10 text-indigo-600 dark:text-indigo-400 border-indigo-500/20',
+  'bg-purple-500/10 text-purple-600 dark:text-purple-400 border-purple-500/20',
+  'bg-emerald-500/10 text-emerald-600 dark:text-emerald-400 border-emerald-500/20',
+  'bg-amber-500/10 text-amber-600 dark:text-amber-400 border-amber-500/20',
+  'bg-rose-500/10 text-rose-600 dark:text-rose-400 border-rose-500/20',
+  'bg-cyan-500/10 text-cyan-600 dark:text-cyan-400 border-cyan-500/20',
+  'bg-blue-500/10 text-blue-600 dark:text-blue-400 border-blue-500/20',
+];
+
+const getSpeakerColor = (name: string) => {
+  let hash = 0;
+  for (let i = 0; i < (name || '').length; i++) hash = name.charCodeAt(i) + ((hash << 5) - hash);
+  return SPEAKER_COLORS[Math.abs(hash) % SPEAKER_COLORS.length];
+};
+
+const getInitials = (name: string) => {
+  if (!name) return '??';
+  const parts = name.trim().split(/\s+/);
+  if (parts.length === 1) return parts[0].slice(0, 2).toUpperCase();
+  return (parts[0][0] + parts[parts.length - 1][0]).toUpperCase();
+};
 
 export const IntelligenceViewer: React.FC = () => {
   const { id } = useParams<{ id: string }>();
@@ -132,6 +196,8 @@ export const IntelligenceViewer: React.FC = () => {
   const [isUploadOpen, setIsUploadOpen] = useState(false);
   const [isDeleteOpen, setIsDeleteOpen] = useState(false);
   const [copiedLink, setCopiedLink] = useState(false);
+  const [copiedSegId, setCopiedSegId] = useState<string | null>(null);
+  const [activeTab, setActiveTab] = useState('overview');
   const [transcriptSearch, setTranscriptSearch] = useState('');
 
   const pollingRef = useRef<ReturnType<typeof setInterval> | null>(null);
@@ -221,6 +287,108 @@ export const IntelligenceViewer: React.FC = () => {
     }
   };
 
+  const handleExportDocx = async () => {
+    if (!meeting) return;
+    try {
+      const response = await documentsControllerExportDocument({
+        path: { id: meeting.id },
+        query: { format: 'docx' },
+        parseAs: 'blob',
+      });
+
+      if (response.error) {
+        throw new Error((response.error as any)?.message || 'Failed to export DOCX document');
+      }
+
+      const blob = response.data as Blob;
+      const url = window.URL.createObjectURL(blob);
+      const a = document.createElement('a');
+      a.href = url;
+      a.download = `${(meeting.title || 'Meeting_Summary').replace(/[^a-zA-Z0-9_-]/g, '_')}_Summary.docx`;
+      document.body.appendChild(a);
+      a.click();
+      a.remove();
+      window.URL.revokeObjectURL(url);
+      setSyncStatusMsg({
+        type: 'success',
+        text: 'Microsoft Word (.docx) document downloaded successfully!',
+      });
+    } catch (err: any) {
+      setSyncStatusMsg({
+        type: 'error',
+        text: `Export failed: ${err.message}`,
+      });
+    }
+  };
+
+  const handleExportPdf = async () => {
+    if (!meeting) return;
+    try {
+      const response = await documentsControllerExportDocument({
+        path: { id: meeting.id },
+        query: { format: 'pdf' },
+        parseAs: 'blob',
+      });
+
+      if (response.error) {
+        throw new Error((response.error as any)?.message || 'Failed to generate PDF document');
+      }
+
+      const blob = response.data as Blob;
+      const url = window.URL.createObjectURL(blob);
+      const a = document.createElement('a');
+      a.href = url;
+      a.download = `${(meeting.title || 'Meeting_Summary').replace(/[^a-zA-Z0-9_-]/g, '_')}_Summary.pdf`;
+      document.body.appendChild(a);
+      a.click();
+      a.remove();
+      window.URL.revokeObjectURL(url);
+      setSyncStatusMsg({
+        type: 'success',
+        text: 'PDF document downloaded successfully!',
+      });
+    } catch (err: any) {
+      setSyncStatusMsg({
+        type: 'error',
+        text: `PDF export failed: ${err.message}`,
+      });
+    }
+  };
+
+  const handleExportMarkdown = async () => {
+    if (!meeting) return;
+    try {
+      const response = await documentsControllerExportDocument({
+        path: { id: meeting.id },
+        query: { format: 'markdown' },
+        parseAs: 'text',
+      });
+
+      if (response.error) {
+        throw new Error((response.error as any)?.message || 'Failed to export Markdown document');
+      }
+
+      const blob = new Blob([response.data as string], { type: 'text/markdown' });
+      const url = window.URL.createObjectURL(blob);
+      const a = document.createElement('a');
+      a.href = url;
+      a.download = `${(meeting.title || 'Meeting_Summary').replace(/[^a-zA-Z0-9_-]/g, '_')}_Summary.md`;
+      document.body.appendChild(a);
+      a.click();
+      a.remove();
+      window.URL.revokeObjectURL(url);
+      setSyncStatusMsg({
+        type: 'success',
+        text: 'Markdown summary downloaded successfully!',
+      });
+    } catch (err: any) {
+      setSyncStatusMsg({
+        type: 'error',
+        text: `Export failed: ${err.message}`,
+      });
+    }
+  };
+
   const formatTime = (ms?: number | bigint) => {
     if (ms === undefined || ms === null) return '00:00';
     const totalSecs = Math.floor(Number(ms) / 1000);
@@ -258,22 +426,20 @@ export const IntelligenceViewer: React.FC = () => {
     switch (status) {
       case 'COMPLETED':
         return (
-          <Badge variant="outline" className="bg-emerald-500/10 text-emerald-500 border-emerald-500/20 text-[10px]">
-            Ready / Analyzed
+          <Badge variant="outline" className="text-xs bg-muted text-foreground border-border font-medium px-2 py-0.5">
+            Analyzed
           </Badge>
         );
       case 'PROCESSING':
         return (
-          <Badge variant="outline" className="bg-purple-500/10 text-purple-500 border-purple-500/20 text-[10px] animate-pulse">
-            AI Processing
+          <Badge variant="outline" className="text-xs bg-muted text-primary border-primary/40 font-medium px-2 py-0.5 animate-pulse">
+            Processing
           </Badge>
         );
-      case 'WAITING_FOR_TRANSCRIPT':
-      case 'CREATED':
       default:
         return (
-          <Badge variant="secondary" className="text-[10px]">
-            Transcript Pending
+          <Badge variant="outline" className="text-xs bg-muted text-muted-foreground border-border font-normal px-2 py-0.5">
+            Pending
           </Badge>
         );
     }
@@ -282,8 +448,8 @@ export const IntelligenceViewer: React.FC = () => {
   if (isLoading) {
     return (
       <div className="p-16 flex flex-col items-center justify-center gap-3 text-muted-foreground">
-        <RiLoader4Line className="w-8 h-8 animate-spin text-primary" />
-        <span className="text-xs font-medium">Loading meeting intelligence...</span>
+        <RiLoader4Line className="w-6 h-6 animate-spin text-muted-foreground" />
+        <span className="text-xs">Loading meeting details...</span>
       </div>
     );
   }
@@ -291,8 +457,8 @@ export const IntelligenceViewer: React.FC = () => {
   if (!meeting) {
     return (
       <div className="p-12 text-center space-y-4">
-        <RiAlertLine className="w-10 h-10 text-destructive mx-auto" />
-        <h2 className="text-base font-bold text-foreground">Meeting Not Found</h2>
+        <RiAlertLine className="w-8 h-8 text-destructive mx-auto" />
+        <h2 className="text-base font-semibold text-foreground">Meeting Not Found</h2>
         <p className="text-xs text-muted-foreground">The requested meeting session could not be located.</p>
         <Link to="/meetings">
           <Button size="sm" variant="outline" className="text-xs">
@@ -313,142 +479,225 @@ export const IntelligenceViewer: React.FC = () => {
       seg.speakerName.toLowerCase().includes(transcriptSearch.toLowerCase()),
   );
 
+  const handleCopySegment = (seg: TranscriptSegment) => {
+    const text = `[${formatTime(seg.startTimeMs)}] ${seg.speakerName}: ${seg.text}`;
+    navigator.clipboard.writeText(text);
+    setCopiedSegId(seg.id);
+    setTimeout(() => setCopiedSegId(null), 2000);
+  };
+
   return (
-    <div className="space-y-6 animate-in fade-in duration-300">
-      {/* Top Navigation & Actions */}
-      <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4 pb-2 border-b border-border">
-        <div className="flex items-center gap-3">
-          <Link to="/meetings">
-            <Button variant="ghost" size="sm" className="h-8 w-8 p-0">
-              <RiArrowLeftLine className="h-4 w-4" />
-            </Button>
-          </Link>
-          <div>
-            <div className="flex items-center gap-2 flex-wrap">
-              {renderProviderIcon(meeting.provider || meeting.source)}
-              <h1 className="text-base sm:text-lg font-bold tracking-tight text-foreground">
-                {meeting.title}
-              </h1>
-              {renderStatusBadge(meeting.status)}
-            </div>
-            <p className="text-xs text-muted-foreground mt-0.5 flex items-center gap-2 flex-wrap">
-              <span>{formatMeetingDate(meeting.startTime || meeting.createdAt)}</span>
-              {meeting.durationSeconds && <span>• {Math.round(meeting.durationSeconds / 60)} mins duration</span>}
-              <span>• Source: {meeting.provider || meeting.source || 'Manual'}</span>
-              {meeting.meetingUrl && (
-                <a
-                  href={meeting.meetingUrl}
-                  target="_blank"
-                  rel="noreferrer"
-                  className="inline-flex items-center gap-0.5 text-primary hover:underline ml-1"
-                >
-                  Join URL <RiExternalLinkLine className="w-3 h-3" />
-                </a>
-              )}
-            </p>
+    <div className="space-y-6 max-w-6xl mx-auto">
+      {/* Top Header & Toolbar */}
+      <div className="space-y-4 pb-4 border-b border-border">
+        {/* Breadcrumb Navigation */}
+        <div className="flex items-center justify-between">
+          <div className="flex items-center gap-2 text-xs text-muted-foreground">
+            <Link to="/meetings" className="hover:text-foreground transition-colors">
+              Meetings
+            </Link>
+            <span>/</span>
+            <span className="text-foreground font-medium truncate max-w-sm">{meeting.title}</span>
           </div>
+          {renderStatusBadge(meeting.status)}
         </div>
 
-        {/* Action Buttons */}
-        <div className="flex flex-wrap items-center gap-2">
-          {/* Join Video Call Button */}
-          {meeting.meetingUrl && (
-            <a
-              href={meeting.meetingUrl}
-              target="_blank"
-              rel="noreferrer"
-              className="inline-flex"
+        {/* Title and Action Buttons */}
+        <div className="flex flex-col md:flex-row md:items-center justify-between gap-4">
+          <div className="space-y-1">
+            <div className="flex items-center gap-2.5">
+              <div className="w-7 h-7 rounded-lg bg-muted border border-border flex items-center justify-center">
+                {renderProviderIcon(meeting.provider || meeting.source)}
+              </div>
+              <h1 className="text-xl sm:text-2xl font-semibold tracking-tight text-foreground">
+                {meeting.title}
+              </h1>
+            </div>
+
+            <div className="flex items-center gap-3 text-xs text-muted-foreground flex-wrap pt-0.5">
+              <span>{formatMeetingDate(meeting.startTime || meeting.createdAt)}</span>
+              {meeting.durationSeconds && (
+                <>
+                  <span>•</span>
+                  <span>{Math.round(meeting.durationSeconds / 60)} mins</span>
+                </>
+              )}
+              <span>•</span>
+              <span>Source: {meeting.provider || meeting.source || 'Manual'}</span>
+              {meeting.meetingUrl && (
+                <>
+                  <span>•</span>
+                  <a
+                    href={meeting.meetingUrl}
+                    target="_blank"
+                    rel="noreferrer"
+                    className="inline-flex items-center gap-1 text-primary hover:underline font-medium"
+                  >
+                    <span>Join URL</span>
+                    <RiExternalLinkLine className="w-3 h-3" />
+                  </a>
+                </>
+              )}
+            </div>
+          </div>
+
+          {/* Action Toolbar */}
+          <div className="flex flex-wrap items-center gap-2">
+            {meeting.meetingUrl && (
+              <a
+                href={meeting.meetingUrl}
+                target="_blank"
+                rel="noreferrer"
+                className="inline-flex"
+              >
+                <Button size="sm" className="h-8 text-xs font-medium gap-1.5 px-3">
+                  <RiExternalLinkLine className="w-3.5 h-3.5" />
+                  <span>Join Call</span>
+                </Button>
+              </a>
+            )}
+
+            <Button
+              variant="outline"
+              size="sm"
+              onClick={handleSyncGoogleTranscript}
+              disabled={isSyncingGoogle || meeting.status === 'PROCESSING'}
+              className="h-8 text-xs gap-1.5 px-3"
+              title="Fetch transcript Google Doc from Google Drive"
             >
-              <Button size="sm" className="h-8 text-xs bg-primary hover:bg-primary/90 text-primary-foreground font-semibold shadow-xs">
-                <RiExternalLinkLine className="w-3.5 h-3.5 mr-1.5" />
-                Join Video Call
-              </Button>
-            </a>
-          )}
+              {isSyncingGoogle ? (
+                <RiLoader4Line className="h-3.5 w-3.5 animate-spin text-muted-foreground" />
+              ) : (
+                <FcGoogle className="h-3.5 w-3.5" />
+              )}
+              <span>{isSyncingGoogle ? 'Syncing...' : 'Sync Meet'}</span>
+            </Button>
 
-          {/* Copy Invite / Link Button */}
-          <Button
-            variant="outline"
-            size="sm"
-            onClick={handleCopyInvite}
-            className="h-8 text-xs border-border hover:bg-muted"
-            title="Copy meeting link and details to clipboard"
-          >
-            {copiedLink ? (
-              <>
-                <RiCheckLine className="w-3.5 h-3.5 mr-1.5 text-emerald-500" />
-                <span className="text-emerald-500 font-medium">Copied!</span>
-              </>
-            ) : (
-              <>
-                <RiFileCopyLine className="w-3.5 h-3.5 mr-1.5 text-muted-foreground" />
-                <span>Copy Invite</span>
-              </>
-            )}
-          </Button>
+            <Button
+              variant="outline"
+              size="sm"
+              onClick={() => setIsUploadOpen(true)}
+              className="h-8 text-xs gap-1.5 px-3"
+              title="Upload transcript text or audio"
+            >
+              <RiUploadCloud2Line className="h-3.5 w-3.5 text-muted-foreground" />
+              <span>Upload File</span>
+            </Button>
 
-          {/* Sync from Google Meet Button */}
-          <Button
-            variant="outline"
-            size="sm"
-            onClick={handleSyncGoogleTranscript}
-            disabled={isSyncingGoogle || meeting.status === 'PROCESSING'}
-            className="h-8 text-xs border-primary/30 text-foreground hover:bg-primary/5"
-            title="Fetch transcript Google Doc from Google Drive / Calendar"
-          >
-            {isSyncingGoogle ? (
-              <RiLoader4Line className="h-3.5 w-3.5 mr-1.5 animate-spin text-primary" />
-            ) : (
-              <FcGoogle className="h-3.5 w-3.5 mr-1.5" />
-            )}
-            <span>{isSyncingGoogle ? 'Fetching Drive...' : 'Sync Meet Transcript'}</span>
-          </Button>
+            <DropdownMenu>
+              <DropdownMenuTrigger asChild>
+                <Button
+                  variant="outline"
+                  size="sm"
+                  className="h-8 text-xs gap-1.5 px-3"
+                  title="Export options"
+                >
+                  <RiDownload2Line className="h-3.5 w-3.5 text-muted-foreground" />
+                  <span>Export</span>
+                  <RiArrowDownSLine className="h-3 w-3 text-muted-foreground opacity-60 ml-0.5" />
+                </Button>
+              </DropdownMenuTrigger>
+              <DropdownMenuContent align="end" className="w-52 p-1">
+                <DropdownMenuLabel>Export Intelligence</DropdownMenuLabel>
+                <DropdownMenuItem
+                  onClick={handleExportPdf}
+                  className="gap-2 py-2 cursor-pointer text-xs"
+                >
+                  <RiFilePdfLine className="w-4 h-4 text-muted-foreground" />
+                  <div className="flex flex-col">
+                    <span className="font-medium">PDF Document (.pdf)</span>
+                    <span className="text-[10px] text-muted-foreground">Standard vector report</span>
+                  </div>
+                </DropdownMenuItem>
+                <DropdownMenuItem
+                  onClick={handleExportDocx}
+                  className="gap-2 py-2 cursor-pointer text-xs"
+                >
+                  <RiFileWordLine className="w-4 h-4 text-muted-foreground" />
+                  <div className="flex flex-col">
+                    <span className="font-medium">Word Document (.docx)</span>
+                    <span className="text-[10px] text-muted-foreground">100% full-width tables</span>
+                  </div>
+                </DropdownMenuItem>
+                <DropdownMenuItem
+                  onClick={handleExportMarkdown}
+                  className="gap-2 py-2 cursor-pointer text-xs"
+                >
+                  <RiMarkdownLine className="w-4 h-4 text-muted-foreground" />
+                  <div className="flex flex-col">
+                    <span className="font-medium">Markdown (.md)</span>
+                    <span className="text-[10px] text-muted-foreground">Raw notes & transcript</span>
+                  </div>
+                </DropdownMenuItem>
+              </DropdownMenuContent>
+            </DropdownMenu>
 
-          {/* Upload Transcript File Button */}
-          <Button
-            variant="outline"
-            size="sm"
-            onClick={() => setIsUploadOpen(true)}
-            className="h-8 text-xs"
-          >
-            <RiUploadCloud2Line className="h-3.5 w-3.5 mr-1.5 text-primary" />
-            Upload File
-          </Button>
+            <Button
+              variant="outline"
+              size="sm"
+              onClick={handleCopyInvite}
+              className="h-8 text-xs gap-1.5 px-3"
+              title="Copy meeting link"
+            >
+              {copiedLink ? (
+                <>
+                  <RiCheckLine className="w-3.5 h-3.5 text-primary" />
+                  <span className="text-primary font-medium">Copied!</span>
+                </>
+              ) : (
+                <>
+                  <RiFileCopyLine className="w-3.5 h-3.5 text-muted-foreground" />
+                  <span>Copy Link</span>
+                </>
+              )}
+            </Button>
 
-          <Button variant="outline" size="sm" className="h-8 text-xs">
-            <RiFileWordLine className="h-3.5 w-3.5 mr-1.5" />
-            DOCX
-          </Button>
-          <Button variant="default" size="sm" className="h-8 text-xs shadow-xs">
-            <RiFilePdfLine className="h-3.5 w-3.5 mr-1.5" />
-            PDF Export
-          </Button>
-
-          <Button
-            variant="outline"
-            size="sm"
-            onClick={() => setIsDeleteOpen(true)}
-            className="h-8 text-xs border-destructive/30 text-destructive hover:bg-destructive/10"
-            title="Delete meeting and remove from provider calendars"
-          >
-            <RiDeleteBin6Line className="h-3.5 w-3.5 mr-1.5" />
-            Delete
-          </Button>
+            <DropdownMenu>
+              <DropdownMenuTrigger asChild>
+                <Button
+                  variant="ghost"
+                  size="sm"
+                  className="h-8 w-8 p-0 text-muted-foreground hover:text-foreground"
+                  title="More actions"
+                >
+                  <RiMore2Fill className="h-4 w-4" />
+                </Button>
+              </DropdownMenuTrigger>
+              <DropdownMenuContent align="end" className="w-44 p-1">
+                {meeting.meetingUrl && (
+                  <DropdownMenuItem asChild className="gap-2 py-1.5 cursor-pointer text-xs">
+                    <a href={meeting.meetingUrl} target="_blank" rel="noreferrer">
+                      <RiExternalLinkLine className="w-3.5 h-3.5 text-muted-foreground" />
+                      <span>Open Link</span>
+                    </a>
+                  </DropdownMenuItem>
+                )}
+                {meeting.meetingUrl && <DropdownMenuSeparator />}
+                <DropdownMenuItem
+                  onClick={() => setIsDeleteOpen(true)}
+                  className="gap-2 py-1.5 text-destructive focus:text-destructive focus:bg-destructive/10 cursor-pointer text-xs"
+                >
+                  <RiDeleteBin6Line className="w-3.5 h-3.5" />
+                  <span>Delete Meeting</span>
+                </DropdownMenuItem>
+              </DropdownMenuContent>
+            </DropdownMenu>
+          </div>
         </div>
       </div>
 
-      {/* Sync Status Feedback Toast/Banner */}
+      {/* Sync / Export Notification Toast */}
       {syncStatusMsg && (
         <div
-          className={`p-3.5 rounded-xl border text-xs flex items-center justify-between gap-2 ${
+          className={`p-3 rounded-lg border text-xs flex items-center justify-between gap-2 ${
             syncStatusMsg.type === 'success'
-              ? 'bg-emerald-500/10 border-emerald-500/20 text-emerald-600 dark:text-emerald-400'
-              : 'bg-amber-500/10 border-amber-500/20 text-amber-600 dark:text-amber-400'
+              ? 'bg-muted border-border text-foreground'
+              : 'bg-destructive/10 border-destructive/20 text-destructive'
           }`}
         >
           <div className="flex items-center gap-2">
             {syncStatusMsg.type === 'success' ? (
-              <RiCheckboxCircleFill className="w-4 h-4 shrink-0" />
+              <RiCheckboxCircleFill className="w-4 h-4 text-primary shrink-0" />
             ) : (
               <RiErrorWarningLine className="w-4 h-4 shrink-0" />
             )}
@@ -458,7 +707,7 @@ export const IntelligenceViewer: React.FC = () => {
             variant="ghost"
             size="sm"
             onClick={() => setSyncStatusMsg(null)}
-            className="h-6 text-[10px] px-2"
+            className="h-6 text-[11px] px-2 text-muted-foreground hover:text-foreground"
           >
             Dismiss
           </Button>
@@ -467,12 +716,12 @@ export const IntelligenceViewer: React.FC = () => {
 
       {/* Processing State Banner */}
       {meeting.status === 'PROCESSING' && (
-        <div className="p-4 rounded-xl bg-purple-500/10 border border-purple-500/20 text-xs text-purple-600 dark:text-purple-400 flex items-center gap-3 animate-pulse">
-          <RiLoader4Line className="w-5 h-5 animate-spin shrink-0 text-purple-500" />
-          <div className="flex-1">
-            <p className="font-semibold">AI Intelligence Engine is Processing Transcript...</p>
-            <p className="text-[11px] opacity-80 mt-0.5">
-              Generating executive summary, identifying key decisions with citations, action items with assignees, and assessing risks.
+        <div className="p-4 rounded-lg bg-muted border border-border text-xs text-foreground flex items-center gap-3">
+          <RiLoader4Line className="w-4 h-4 animate-spin shrink-0 text-primary" />
+          <div className="flex-1 space-y-0.5">
+            <p className="font-medium">Transcript processing in progress...</p>
+            <p className="text-[11px] text-muted-foreground">
+              Extracting executive summary, decisions, action items, and risks.
             </p>
           </div>
         </div>
@@ -480,15 +729,15 @@ export const IntelligenceViewer: React.FC = () => {
 
       {/* Empty / Pending Transcript Banner */}
       {(!segments || segments.length === 0) && meeting.status !== 'PROCESSING' && (
-        <Card className="border-border shadow-xs border-dashed bg-muted/20">
+        <Card className="border-border border-dashed bg-muted/20">
           <CardContent className="p-8 text-center space-y-4">
-            <div className="w-12 h-12 rounded-2xl bg-primary/10 text-primary flex items-center justify-center mx-auto">
-              <RiUploadCloud2Line className="w-6 h-6" />
+            <div className="w-10 h-10 rounded-lg bg-muted text-muted-foreground flex items-center justify-center mx-auto border border-border">
+              <RiUploadCloud2Line className="w-5 h-5" />
             </div>
             <div className="max-w-md mx-auto space-y-1">
               <h3 className="font-semibold text-sm text-foreground">No Transcript Ingested Yet</h3>
               <p className="text-xs text-muted-foreground leading-relaxed">
-                If you enabled recording/transcripts during your Google Meet call, Google Workspace writes the transcript document to your Google Drive inside the <strong>Meet Recordings</strong> folder.
+                Sync with Google Meet or upload a transcript file (.txt, .json, .vtt) to generate intelligence.
               </p>
             </div>
             <div className="flex flex-wrap items-center justify-center gap-3 pt-2">
@@ -511,303 +760,400 @@ export const IntelligenceViewer: React.FC = () => {
                 onClick={() => setIsUploadOpen(true)}
                 className="h-8 text-xs"
               >
-                <RiUploadCloud2Line className="w-3.5 h-3.5 mr-1.5 text-primary" />
-                Upload File (.txt, .json, .vtt)
+                <RiUploadCloud2Line className="w-3.5 h-3.5 mr-1.5 text-muted-foreground" />
+                Upload File
               </Button>
             </div>
           </CardContent>
         </Card>
       )}
 
-      {/* Structured Intelligence Tabs */}
-      <Tabs defaultValue="overview" className="w-full space-y-4">
-        <TabsList className="bg-muted/50 p-1 border border-border flex flex-wrap h-auto">
-          <TabsTrigger value="overview" className="text-xs">
+      {/* Structured Intelligence Tabs - Linear Style Underline Bar */}
+      <Tabs value={activeTab} onValueChange={setActiveTab} className="w-full space-y-6">
+        <TabsList className="w-full justify-start border-b border-border bg-transparent p-0 rounded-none h-10 gap-6 overflow-x-auto flex-nowrap">
+          <TabsTrigger
+            value="overview"
+            className="rounded-none border-b-2 border-transparent px-1 py-2 text-xs font-medium text-muted-foreground shadow-none data-[state=active]:border-primary data-[state=active]:text-foreground data-[state=active]:bg-transparent transition-colors"
+          >
             Executive Summary
           </TabsTrigger>
-          <TabsTrigger value="decisions" className="text-xs">
-            Decisions ({meeting.decisions?.length || 0})
+          <TabsTrigger
+            value="topics"
+            className="rounded-none border-b-2 border-transparent px-1 py-2 text-xs font-medium text-muted-foreground shadow-none data-[state=active]:border-primary data-[state=active]:text-foreground data-[state=active]:bg-transparent transition-colors"
+          >
+            Topics <span className="ml-1 text-[11px] text-muted-foreground/70 font-mono">{meeting.topics?.length || 0}</span>
           </TabsTrigger>
-          <TabsTrigger value="actions" className="text-xs">
-            Action Items ({meeting.actionItems?.length || 0})
+          <TabsTrigger
+            value="decisions"
+            className="rounded-none border-b-2 border-transparent px-1 py-2 text-xs font-medium text-muted-foreground shadow-none data-[state=active]:border-primary data-[state=active]:text-foreground data-[state=active]:bg-transparent transition-colors"
+          >
+            Decisions <span className="ml-1 text-[11px] text-muted-foreground/70 font-mono">{meeting.decisions?.length || 0}</span>
           </TabsTrigger>
-          <TabsTrigger value="risks" className="text-xs">
-            Risks & Blockers ({meeting.risks?.length || 0})
+          <TabsTrigger
+            value="actions"
+            className="rounded-none border-b-2 border-transparent px-1 py-2 text-xs font-medium text-muted-foreground shadow-none data-[state=active]:border-primary data-[state=active]:text-foreground data-[state=active]:bg-transparent transition-colors"
+          >
+            Action Items <span className="ml-1 text-[11px] text-muted-foreground/70 font-mono">{meeting.actionItems?.length || 0}</span>
           </TabsTrigger>
-          <TabsTrigger value="questions" className="text-xs">
-            Open Questions ({meeting.openQuestions?.length || 0})
+          <TabsTrigger
+            value="risks"
+            className="rounded-none border-b-2 border-transparent px-1 py-2 text-xs font-medium text-muted-foreground shadow-none data-[state=active]:border-primary data-[state=active]:text-foreground data-[state=active]:bg-transparent transition-colors"
+          >
+            Risks <span className="ml-1 text-[11px] text-muted-foreground/70 font-mono">{meeting.risks?.length || 0}</span>
           </TabsTrigger>
-          <TabsTrigger value="transcript" className="text-xs">
-            Full Transcript ({segments.length})
+          <TabsTrigger
+            value="questions"
+            className="rounded-none border-b-2 border-transparent px-1 py-2 text-xs font-medium text-muted-foreground shadow-none data-[state=active]:border-primary data-[state=active]:text-foreground data-[state=active]:bg-transparent transition-colors"
+          >
+            Questions <span className="ml-1 text-[11px] text-muted-foreground/70 font-mono">{meeting.openQuestions?.length || 0}</span>
+          </TabsTrigger>
+          <TabsTrigger
+            value="transcript"
+            className="rounded-none border-b-2 border-transparent px-1 py-2 text-xs font-medium text-muted-foreground shadow-none data-[state=active]:border-primary data-[state=active]:text-foreground data-[state=active]:bg-transparent transition-colors"
+          >
+            Transcript <span className="ml-1 text-[11px] text-muted-foreground/70 font-mono">{segments.length}</span>
           </TabsTrigger>
         </TabsList>
 
-        {/* Tab 1: Overview */}
-        <TabsContent value="overview" className="space-y-4 mt-0">
-          <Card className="shadow-xs">
-            <CardHeader className="p-5 pb-3">
-              <CardTitle className="text-xs font-semibold uppercase tracking-wider text-primary flex items-center gap-2">
-                <RiSparklingFill className="h-4 w-4" />
-                Executive Summary
-              </CardTitle>
-            </CardHeader>
-            <CardContent className="p-5 pt-0 text-sm text-foreground/90 leading-relaxed space-y-3">
-              {latestSummary?.overview ? (
-                <div className="space-y-3">
-                  <p>{latestSummary.overview}</p>
-                  {latestSummary.keyTakeaways && latestSummary.keyTakeaways.length > 0 && (
-                    <div className="pt-2">
-                      <h4 className="text-xs font-semibold text-foreground mb-2">Key Takeaways:</h4>
-                      <ul className="list-disc list-inside space-y-1 text-xs text-muted-foreground">
-                        {latestSummary.keyTakeaways.map((takeaway, i) => (
-                          <li key={i}>{takeaway}</li>
-                        ))}
-                      </ul>
-                    </div>
-                  )}
-                </div>
-              ) : (
-                <p className="text-xs text-muted-foreground italic">
-                  {meeting.status === 'PROCESSING'
-                    ? 'AI summary is currently generating...'
-                    : 'No summary generated yet. Ingest or sync a transcript to generate intelligence.'}
+        {/* Tab 1: Overview / Editorial Document */}
+        <TabsContent value="overview" className="space-y-6 mt-0">
+          {latestSummary?.executiveSummary || latestSummary?.overview ? (
+            <div className="space-y-8">
+              {/* Executive Brief Paragraph */}
+              <div className="p-5 rounded-lg bg-card border border-border space-y-3">
+                <h3 className="text-xs font-semibold uppercase tracking-wider text-muted-foreground">
+                  Overview
+                </h3>
+                <p className="text-sm text-foreground/90 leading-7 font-normal">
+                  {latestSummary.executiveSummary || latestSummary.overview}
                 </p>
+              </div>
+
+              {/* Discussion Breakdown */}
+              {latestSummary.summary && (
+                <div className="space-y-4">
+                  <h3 className="text-xs font-semibold uppercase tracking-wider text-muted-foreground">
+                    Discussion Breakdown
+                  </h3>
+                  <div className="p-5 rounded-lg bg-card border border-border">
+                    <FormattedDiscussion content={latestSummary.summary} />
+                  </div>
+                </div>
               )}
-            </CardContent>
-          </Card>
 
-          {/* Quick Decision & Action highlights */}
-          <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-            <Card className="shadow-xs">
-              <CardHeader className="p-4 pb-2">
-                <CardTitle className="text-xs font-semibold text-foreground flex items-center justify-between">
-                  <span>Key Decisions</span>
-                  <Badge variant="secondary" className="text-[10px]">
-                    {meeting.decisions?.length || 0} Identified
-                  </Badge>
-                </CardTitle>
-              </CardHeader>
-              <CardContent className="p-4 pt-1 space-y-2.5">
-                {meeting.decisions && meeting.decisions.length > 0 ? (
-                  meeting.decisions.slice(0, 3).map((d) => (
-                    <div key={d.id} className="p-2.5 rounded-lg border border-border bg-card text-xs">
-                      <p className="font-medium text-foreground">{d.decision}</p>
-                      {d.speakerName && (
-                        <span className="text-[10px] text-muted-foreground block mt-1">
-                          Speaker: {d.speakerName} {d.timestampStartMs ? `• Grounded at ${formatTime(d.timestampStartMs)}` : ''}
-                        </span>
-                      )}
-                    </div>
-                  ))
-                ) : (
-                  <p className="text-xs text-muted-foreground italic">No decisions recorded yet.</p>
-                )}
-              </CardContent>
-            </Card>
+              {/* Key Takeaways */}
+              {latestSummary.keyTakeaways && latestSummary.keyTakeaways.length > 0 && (
+                <div className="space-y-3">
+                  <h3 className="text-xs font-semibold uppercase tracking-wider text-muted-foreground">
+                    Key Takeaways
+                  </h3>
+                  <div className="p-5 rounded-lg bg-card border border-border">
+                    <ul className="space-y-2.5">
+                      {latestSummary.keyTakeaways.map((takeaway, i) => (
+                        <li key={i} className="flex items-start gap-3 text-xs text-foreground/85 leading-relaxed">
+                          <span className="w-1.5 h-1.5 rounded-full bg-primary mt-1.5 shrink-0" />
+                          <span>{takeaway}</span>
+                        </li>
+                      ))}
+                    </ul>
+                  </div>
+                </div>
+              )}
 
-            <Card className="shadow-xs">
-              <CardHeader className="p-4 pb-2">
-                <CardTitle className="text-xs font-semibold text-foreground flex items-center justify-between">
-                  <span>Action Items</span>
-                  <Badge variant="warning" className="text-[10px]">
-                    {meeting.actionItems?.length || 0} Total
-                  </Badge>
-                </CardTitle>
-              </CardHeader>
-              <CardContent className="p-4 pt-1 space-y-2.5">
-                {meeting.actionItems && meeting.actionItems.length > 0 ? (
-                  meeting.actionItems.slice(0, 3).map((a) => (
-                    <div key={a.id} className="p-2.5 rounded-lg border border-border bg-card text-xs">
-                      <div className="flex items-center justify-between">
-                        <p className="font-medium text-foreground">{a.task}</p>
-                        {a.assignee && (
-                          <span className="text-[10px] font-semibold text-primary">{a.assignee.name}</span>
-                        )}
-                      </div>
-                      {a.dueDate && (
-                        <span className="text-[10px] text-muted-foreground block mt-1">
-                          Due: {new Date(a.dueDate).toLocaleDateString()}
-                        </span>
-                      )}
+              {/* Quick Side-by-Side Summary of Decisions & Action Items */}
+              <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                <div className="p-4 rounded-lg bg-card border border-border space-y-3">
+                  <div className="flex items-center justify-between pb-2 border-b border-border">
+                    <h4 className="text-xs font-semibold text-foreground">Decisions</h4>
+                    <span className="text-[11px] font-mono text-muted-foreground">{meeting.decisions?.length || 0} total</span>
+                  </div>
+                  <div className="space-y-2.5">
+                    {meeting.decisions && meeting.decisions.length > 0 ? (
+                      meeting.decisions.slice(0, 3).map((d) => (
+                        <div key={d.id} className="text-xs space-y-0.5">
+                          <p className="font-medium text-foreground">{d.decision}</p>
+                          {d.speakerName && (
+                            <span className="text-[11px] text-muted-foreground block">
+                              {d.speakerName} {d.timestampStartMs ? `• ${formatTime(d.timestampStartMs)}` : ''}
+                            </span>
+                          )}
+                        </div>
+                      ))
+                    ) : (
+                      <p className="text-xs text-muted-foreground italic">No decisions recorded.</p>
+                    )}
+                  </div>
+                </div>
+
+                <div className="p-4 rounded-lg bg-card border border-border space-y-3">
+                  <div className="flex items-center justify-between pb-2 border-b border-border">
+                    <h4 className="text-xs font-semibold text-foreground">Action Items</h4>
+                    <span className="text-[11px] font-mono text-muted-foreground">{meeting.actionItems?.length || 0} total</span>
+                  </div>
+                  <div className="space-y-2.5">
+                    {meeting.actionItems && meeting.actionItems.length > 0 ? (
+                      meeting.actionItems.slice(0, 3).map((a) => (
+                        <div key={a.id} className="text-xs space-y-0.5">
+                          <div className="flex items-center justify-between">
+                            <p className="font-medium text-foreground">{a.description || a.task}</p>
+                            <span className="text-[10px] text-muted-foreground uppercase font-mono">{a.priority || 'MEDIUM'}</span>
+                          </div>
+                          {(a.assigneeName || a.assignee?.name) && (
+                            <span className="text-[11px] text-muted-foreground block">
+                              Assigned to {a.assigneeName || a.assignee?.name}
+                            </span>
+                          )}
+                        </div>
+                      ))
+                    ) : (
+                      <p className="text-xs text-muted-foreground italic">No action items recorded.</p>
+                    )}
+                  </div>
+                </div>
+              </div>
+            </div>
+          ) : (
+            <div className="p-12 text-center text-xs text-muted-foreground italic bg-card rounded-lg border border-border">
+              {meeting.status === 'PROCESSING'
+                ? 'Generating summary...'
+                : 'No summary available. Ingest a transcript to generate intelligence.'}
+            </div>
+          )}
+        </TabsContent>
+
+        {/* Tab 2: Topics */}
+        <TabsContent value="topics" className="space-y-3 mt-0">
+          <div className="p-5 rounded-lg bg-card border border-border divide-y divide-border">
+            {meeting.topics && meeting.topics.length > 0 ? (
+              meeting.topics.map((t, index) => (
+                <div key={t.id} className="py-4 first:pt-0 last:pb-0 space-y-1.5">
+                  <div className="flex items-center justify-between">
+                    <div className="flex items-baseline gap-2">
+                      <span className="text-xs font-mono text-muted-foreground">{index + 1}.</span>
+                      <h4 className="font-semibold text-xs text-foreground">
+                        {t.title || (t as any).topic}
+                      </h4>
                     </div>
-                  ))
-                ) : (
-                  <p className="text-xs text-muted-foreground italic">No action items recorded yet.</p>
-                )}
-              </CardContent>
-            </Card>
+                    {t.importance && (
+                      <span className="text-[11px] text-muted-foreground font-mono">
+                        Importance: {t.importance}/5
+                      </span>
+                    )}
+                  </div>
+                  <p className="text-xs text-muted-foreground leading-relaxed pl-5">{t.summary}</p>
+                </div>
+              ))
+            ) : (
+              <p className="text-xs text-muted-foreground p-6 text-center italic">
+                No discussion topics identified.
+              </p>
+            )}
           </div>
         </TabsContent>
 
-        {/* Tab 2: Decisions */}
+        {/* Tab 3: Decisions */}
         <TabsContent value="decisions" className="space-y-3 mt-0">
-          <Card className="shadow-xs">
-            <CardContent className="p-4 space-y-3">
-              {meeting.decisions && meeting.decisions.length > 0 ? (
-                meeting.decisions.map((d, index) => (
-                  <div key={d.id} className="p-3.5 rounded-lg border border-border bg-card">
-                    <div className="flex items-center justify-between">
+          <div className="p-5 rounded-lg bg-card border border-border divide-y divide-border">
+            {meeting.decisions && meeting.decisions.length > 0 ? (
+              meeting.decisions.map((d, index) => (
+                <div key={d.id} className="py-4 first:pt-0 last:pb-0 space-y-2">
+                  <div className="flex items-center justify-between">
+                    <div className="flex items-baseline gap-2">
+                      <span className="text-xs font-mono text-muted-foreground">{index + 1}.</span>
                       <span className="font-semibold text-xs text-foreground">
-                        {index + 1}. {d.topic || 'Decision'}
+                        {d.topic || 'Decision'}
                       </span>
-                      {d.confidenceScore !== undefined && (
-                        <Badge variant="success" className="text-[10px]">
-                          Confidence: {Math.round(d.confidenceScore * 100)}%
-                        </Badge>
+                    </div>
+                    {(d.confidence !== undefined || d.confidenceScore !== undefined) && (
+                      <span className="text-[11px] font-mono text-muted-foreground">
+                        {Math.round((d.confidence ?? d.confidenceScore ?? 1) * 100)}% confidence
+                      </span>
+                    )}
+                  </div>
+                  <p className="text-xs text-foreground/90 pl-5 font-medium leading-relaxed">{d.decision}</p>
+                  {(d.context || d.rationale) && (
+                    <p className="text-xs text-muted-foreground pl-5 leading-relaxed">
+                      {d.context || d.rationale}
+                    </p>
+                  )}
+                  {d.timestampStartMs !== undefined && (
+                    <div className="text-[11px] text-muted-foreground font-mono pl-5 pt-1">
+                      Citation: [{formatTime(d.timestampStartMs)}]{d.speakerName ? ` ${d.speakerName}` : ''}
+                    </div>
+                  )}
+                </div>
+              ))
+            ) : (
+              <p className="text-xs text-muted-foreground p-6 text-center italic">
+                No decisions recorded.
+              </p>
+            )}
+          </div>
+        </TabsContent>
+
+        {/* Tab 4: Action Items */}
+        <TabsContent value="actions" className="space-y-3 mt-0">
+          <div className="p-5 rounded-lg bg-card border border-border divide-y divide-border">
+            {meeting.actionItems && meeting.actionItems.length > 0 ? (
+              meeting.actionItems.map((a) => (
+                <div key={a.id} className="py-3.5 first:pt-0 last:pb-0 flex items-start justify-between gap-4">
+                  <div className="space-y-1">
+                    <div className="flex items-center gap-2">
+                      <span className="w-3.5 h-3.5 rounded border border-border flex items-center justify-center shrink-0">
+                        {a.status === 'COMPLETED' && <RiCheckLine className="w-3 h-3 text-primary" />}
+                      </span>
+                      <span className="font-medium text-xs text-foreground">{a.description || a.task}</span>
+                    </div>
+                    <div className="flex items-center gap-2 text-[11px] text-muted-foreground pl-5.5">
+                      <span>Assignee: {a.assigneeName || a.assignee?.name || 'Unassigned'}</span>
+                      <span>•</span>
+                      <span className="font-mono uppercase">{a.priority || 'MEDIUM'}</span>
+                      {(a.deadline || a.dueDate) && (
+                        <>
+                          <span>•</span>
+                          <span>Due: {new Date(a.deadline || a.dueDate!).toLocaleDateString()}</span>
+                        </>
                       )}
                     </div>
-                    <p className="text-xs text-foreground/90 mt-1.5 font-medium">{d.decision}</p>
-                    {d.rationale && (
-                      <p className="text-xs text-muted-foreground mt-1">{d.rationale}</p>
-                    )}
-                    {d.timestampStartMs !== undefined && (
-                      <div className="flex items-center gap-2 mt-2 pt-2 border-t border-border/60 text-[10px] text-muted-foreground">
-                        <RiTimeLine className="h-3 w-3" />
-                        <span>
-                          Timestamp Citation: {formatTime(d.timestampStartMs)} {d.speakerName ? `• Speaker: ${d.speakerName}` : ''}
-                        </span>
-                      </div>
-                    )}
                   </div>
-                ))
-              ) : (
-                <p className="text-xs text-muted-foreground p-4 text-center italic">
-                  No structured decisions identified for this meeting.
-                </p>
-              )}
-            </CardContent>
-          </Card>
+                  <Badge variant="outline" className="text-[10px] font-mono shrink-0 bg-muted border-border">
+                    {a.status || 'PENDING'}
+                  </Badge>
+                </div>
+              ))
+            ) : (
+              <p className="text-xs text-muted-foreground p-6 text-center italic">
+                No action items recorded.
+              </p>
+            )}
+          </div>
         </TabsContent>
 
-        {/* Tab 3: Action Items */}
-        <TabsContent value="actions" className="space-y-3 mt-0">
-          <Card className="shadow-xs">
-            <CardContent className="p-4 space-y-3">
-              {meeting.actionItems && meeting.actionItems.length > 0 ? (
-                meeting.actionItems.map((a) => (
-                  <div key={a.id} className="p-3.5 rounded-lg border border-border bg-card flex items-start justify-between">
-                    <div>
-                      <div className="flex items-center gap-2">
-                        <span className="h-4 w-4 rounded-full border border-border flex items-center justify-center text-[10px]">
-                          <RiCheckLine className="h-2.5 w-2.5 text-primary" />
-                        </span>
-                        <span className="font-semibold text-xs text-foreground">{a.task}</span>
-                      </div>
-                      <p className="text-[11px] text-muted-foreground mt-1 ml-6">
-                        Assignee: <strong>{a.assignee?.name || 'Unassigned'}</strong> • Priority:{' '}
-                        <strong>{a.priority}</strong> • Status: <strong>{a.status}</strong>
-                        {a.dueDate && ` • Deadline: ${new Date(a.dueDate).toLocaleDateString()}`}
-                      </p>
-                    </div>
-                    <Badge variant={a.status === 'COMPLETED' ? 'success' : 'info'} className="text-[10px]">
-                      {a.status}
+        {/* Tab 5: Risks */}
+        <TabsContent value="risks" className="space-y-3 mt-0">
+          <div className="p-5 rounded-lg bg-card border border-border divide-y divide-border">
+            {meeting.risks && meeting.risks.length > 0 ? (
+              meeting.risks.map((r) => (
+                <div key={r.id} className="py-4 first:pt-0 last:pb-0 space-y-1.5">
+                  <div className="flex items-center justify-between">
+                    <span className="font-semibold text-xs text-foreground flex items-center gap-1.5">
+                      <RiAlertLine className="h-3.5 w-3.5 text-muted-foreground" />
+                      {r.description || r.risk}
+                    </span>
+                    <Badge variant="outline" className="text-[10px] font-mono bg-muted border-border">
+                      {r.severity}
                     </Badge>
                   </div>
-                ))
-              ) : (
-                <p className="text-xs text-muted-foreground p-4 text-center italic">
-                  No action items identified for this meeting.
-                </p>
-              )}
-            </CardContent>
-          </Card>
+                  {r.mitigation && (
+                    <p className="text-xs text-muted-foreground leading-relaxed pl-5">
+                      <strong>Mitigation:</strong> {r.mitigation}
+                    </p>
+                  )}
+                </div>
+              ))
+            ) : (
+              <p className="text-xs text-muted-foreground p-6 text-center italic">
+                No risks or blockers recorded.
+              </p>
+            )}
+          </div>
         </TabsContent>
 
-        {/* Tab 4: Risks */}
-        <TabsContent value="risks" className="space-y-3 mt-0">
-          <Card className="shadow-xs">
-            <CardContent className="p-4 space-y-3">
-              {meeting.risks && meeting.risks.length > 0 ? (
-                meeting.risks.map((r) => (
-                  <div key={r.id} className="p-3.5 rounded-lg border border-destructive/20 bg-destructive/5">
-                    <div className="flex items-center justify-between">
-                      <span className="font-semibold text-xs text-foreground flex items-center gap-1.5 text-destructive">
-                        <RiAlertLine className="h-3.5 w-3.5" />
-                        {r.risk}
-                      </span>
-                      <Badge variant="destructive" className="text-[10px]">
-                        {r.severity} Severity
-                      </Badge>
+        {/* Tab 6: Open Questions */}
+        <TabsContent value="questions" className="space-y-3 mt-0">
+          <div className="p-5 rounded-lg bg-card border border-border divide-y divide-border">
+            {meeting.openQuestions && meeting.openQuestions.length > 0 ? (
+              meeting.openQuestions.map((q, idx) => (
+                <div key={q.id} className="py-3.5 first:pt-0 last:pb-0 flex items-start justify-between gap-4">
+                  <div className="space-y-1">
+                    <div className="flex items-baseline gap-2">
+                      <span className="text-xs font-mono text-muted-foreground">{idx + 1}.</span>
+                      <span className="font-medium text-xs text-foreground">{q.question}</span>
                     </div>
-                    {r.mitigation && (
-                      <p className="text-xs text-muted-foreground mt-1.5">
-                        <strong>Mitigation:</strong> {r.mitigation}
+                    {(q.assignedTo || q.owner) && (
+                      <p className="text-[11px] text-muted-foreground pl-5">
+                        Assigned to {q.assignedTo || q.owner}
                       </p>
                     )}
                   </div>
-                ))
-              ) : (
-                <p className="text-xs text-muted-foreground p-4 text-center italic">
-                  No critical risks or blockers identified.
-                </p>
-              )}
-            </CardContent>
-          </Card>
+                  {q.status && (
+                    <Badge variant="outline" className="text-[10px] font-mono bg-muted border-border shrink-0">
+                      {q.status}
+                    </Badge>
+                  )}
+                </div>
+              ))
+            ) : (
+              <p className="text-xs text-muted-foreground p-6 text-center italic">
+                No open questions recorded.
+              </p>
+            )}
+          </div>
         </TabsContent>
 
-        {/* Tab 5: Open Questions */}
-        <TabsContent value="questions" className="space-y-3 mt-0">
-          <Card className="shadow-xs">
-            <CardContent className="p-4 space-y-3">
-              {meeting.openQuestions && meeting.openQuestions.length > 0 ? (
-                meeting.openQuestions.map((q, idx) => (
-                  <div key={q.id} className="p-3.5 rounded-lg border border-border bg-card flex items-start gap-2.5">
-                    <RiQuestionLine className="w-4 h-4 text-primary shrink-0 mt-0.5" />
-                    <div>
-                      <span className="font-semibold text-xs text-foreground">{idx + 1}. {q.question}</span>
-                    </div>
-                  </div>
-                ))
-              ) : (
-                <p className="text-xs text-muted-foreground p-4 text-center italic">
-                  No open questions recorded.
-                </p>
-              )}
-            </CardContent>
-          </Card>
-        </TabsContent>
-
-        {/* Tab 6: Full Transcript */}
-        <TabsContent value="transcript" className="space-y-3 mt-0">
-          <Card className="shadow-xs">
-            <div className="p-3 border-b border-border bg-muted/20 flex items-center justify-between gap-3">
-              <div className="relative flex-1 max-w-sm">
-                <RiSearch2Line className="absolute left-2.5 top-1/2 -translate-y-1/2 w-3.5 h-3.5 text-muted-foreground" />
+        {/* Tab 7: Full Transcript */}
+        <TabsContent value="transcript" className="space-y-4 mt-0">
+          <div className="rounded-lg bg-card border border-border overflow-hidden">
+            <div className="p-3 border-b border-border bg-muted/20 flex flex-col sm:flex-row sm:items-center justify-between gap-3">
+              <div className="relative flex-1 max-w-md">
+                <RiSearch2Line className="absolute left-3 top-1/2 -translate-y-1/2 w-3.5 h-3.5 text-muted-foreground" />
                 <input
                   type="text"
                   value={transcriptSearch}
                   onChange={(e) => setTranscriptSearch(e.target.value)}
-                  placeholder="Search transcript by speaker or phrase..."
-                  className="w-full pl-8 pr-3 py-1.5 text-xs rounded-lg border border-border bg-background outline-hidden focus:border-primary"
+                  placeholder="Search transcript..."
+                  className="w-full pl-8.5 pr-3 py-1 text-xs rounded-md border border-border bg-background outline-hidden focus:border-primary"
                 />
               </div>
-              <span className="text-[11px] text-muted-foreground font-mono">
+              <span className="text-[11px] text-muted-foreground font-mono shrink-0">
                 {filteredSegments.length} of {segments.length} segments
               </span>
             </div>
 
-            <CardContent className="p-4 space-y-3 font-mono text-xs text-muted-foreground divide-y divide-border max-h-[600px] overflow-y-auto">
+            <div className="p-4 space-y-3 divide-y divide-border/60 max-h-[640px] overflow-y-auto">
               {filteredSegments.length > 0 ? (
-                filteredSegments.map((seg) => (
-                  <div key={seg.id} className="pt-3 first:pt-0">
-                    <div className="flex items-center gap-2 mb-1">
-                      <span className="text-[10px] px-1.5 py-0.5 rounded-md bg-secondary text-foreground font-mono">
-                        [{formatTime(seg.startTimeMs)}]
-                      </span>
-                      <span className="font-bold text-foreground">{seg.speakerName}:</span>
+                filteredSegments.map((seg) => {
+                  const isCopied = copiedSegId === seg.id;
+                  return (
+                    <div
+                      key={seg.id}
+                      className="pt-3 first:pt-0 group text-xs space-y-1"
+                    >
+                      <div className="flex items-center justify-between gap-2">
+                        <div className="flex items-center gap-2">
+                          <span className="text-[11px] font-mono text-muted-foreground">
+                            [{formatTime(seg.startTimeMs)}]
+                          </span>
+                          <span className="font-semibold text-foreground">
+                            {seg.speakerName}
+                          </span>
+                        </div>
+
+                        <Button
+                          variant="ghost"
+                          size="sm"
+                          onClick={() => handleCopySegment(seg)}
+                          className="h-5 text-[10px] px-1.5 opacity-0 group-hover:opacity-100 transition-opacity text-muted-foreground hover:text-foreground"
+                          title="Copy text"
+                        >
+                          {isCopied ? 'Copied' : 'Copy'}
+                        </Button>
+                      </div>
+                      <p className="text-foreground/85 leading-relaxed pl-1 whitespace-pre-wrap font-sans text-xs">
+                        {seg.text}
+                      </p>
                     </div>
-                    <p className="text-foreground/90 pl-1 leading-relaxed whitespace-pre-wrap">{seg.text}</p>
-                  </div>
-                ))
+                  );
+                })
               ) : (
                 <p className="text-xs text-muted-foreground p-8 text-center italic">
                   {segments.length === 0
-                    ? 'No transcript segments available. Ingest a transcript using the button above.'
+                    ? 'No transcript segments available.'
                     : 'No segments match your search.'}
                 </p>
               )}
-            </CardContent>
-          </Card>
+            </div>
+          </div>
         </TabsContent>
       </Tabs>
 

@@ -16,14 +16,33 @@ import { cn } from '@/lib/utils';
 import { Button } from '@/components/ui/button';
 import { UploadTranscriptModal } from '@/features/transcripts/components/UploadTranscriptModal';
 
+import { useMeetingsQuery } from '@/features/meetings/hooks/useMeetings';
+
 export const Sidebar: React.FC = () => {
   const [isUploadModalOpen, setIsUploadModalOpen] = useState(false);
+  const { data: meetingsData } = useMeetingsQuery({ limit: 100 });
+
+  const totalMeetings = meetingsData?.total ?? meetingsData?.items?.length ?? 0;
+  const pendingActionsCount = meetingsData?.items?.reduce(
+    (acc, m) => acc + (m.pendingActionsCount ?? m.actionItems?.filter((a) => a.status === 'PENDING' || a.status === 'IN_PROGRESS').length ?? 0),
+    0
+  ) ?? 0;
 
   const mainNav = [
     { label: 'Dashboard', icon: RiDashboard3Line, href: '/' },
-    { label: 'Meetings', icon: RiCalendarEventLine, href: '/meetings', badge: '3' },
+    { 
+      label: 'Meetings', 
+      icon: RiCalendarEventLine, 
+      href: '/meetings', 
+      badge: totalMeetings > 0 ? String(totalMeetings) : undefined 
+    },
     { label: 'Calendar & To-Do', icon: RiCalendar2Line, href: '/calendar' },
-    { label: 'Action Items', icon: RiCheckboxCircleLine, href: '/action-items', badge: '5' },
+    { 
+      label: 'Action Items', 
+      icon: RiCheckboxCircleLine, 
+      href: '/action-items', 
+      badge: pendingActionsCount > 0 ? String(pendingActionsCount) : undefined 
+    },
   ];
 
   const knowledgeNav = [

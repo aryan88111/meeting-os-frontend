@@ -600,6 +600,24 @@ export type DocumentsControllerGetDocumentsResponses = {
     200: unknown;
 };
 
+export type DocumentsControllerExportDocumentData = {
+    body?: never;
+    path: {
+        id: string;
+    };
+    query?: {
+        /**
+         * Format of the report (docx, pdf, markdown)
+         */
+        format?: 'docx' | 'pdf' | 'markdown';
+    };
+    url: '/api/v1/meetings/{id}/documents/export';
+};
+
+export type DocumentsControllerExportDocumentResponses = {
+    200: unknown;
+};
+
 export type SearchControllerSearchMeetingsData = {
     body?: never;
     path?: never;
