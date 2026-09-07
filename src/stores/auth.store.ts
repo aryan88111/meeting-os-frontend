@@ -33,10 +33,36 @@ interface AuthState {
   login: (email: string, password: string) => Promise<void>;
   register: (name: string, email: string, password: string, organizationName?: string) => Promise<void>;
   loginWithOAuth: (provider: 'google' | 'github' | 'azure') => Promise<void>;
-  syncSupabaseSession: (accessToken: string, email?: string, name?: string) => Promise<void>;
+  syncSupabaseSession: (
+    accessToken: string,
+    email?: string,
+    name?: string,
+    providerToken?: string,
+    providerRefreshToken?: string,
+    provider?: string,
+  ) => Promise<void>;
   fetchProfile: () => Promise<void>;
   logout: () => Promise<void>;
   clearError: () => void;
+}
+
+export function normalizeAuthError(err: any): string {
+  if (!err) return 'An unexpected error occurred';
+
+  const message = typeof err === 'string' ? err : err.message || '';
+  const isNetworkFailure =
+    err.name === 'TypeError' ||
+    message.includes('NetworkError') ||
+    message.includes('Failed to fetch') ||
+    message.includes('fetch failed') ||
+    message.includes('Network request failed') ||
+    message.includes('ERR_CONNECTION_REFUSED');
+
+  if (isNetworkFailure) {
+    return 'Unable to connect to the MeetingOS API server. Please check your network connection or verify that the backend server is running on port 8000.';
+  }
+
+  return message || 'An unexpected error occurred';
 }
 
 const TOKEN_KEY = 'meetingos_auth_token';
@@ -65,6 +91,10 @@ export const useAuthStore = create<AuthState>((set, get) => ({
       }
 
       const data = response.data as any;
+      if (!data?.token) {
+        throw new Error('No authentication token returned by the server.');
+      }
+
       localStorage.setItem(TOKEN_KEY, data.token);
       set({
         token: data.token,
@@ -76,8 +106,9 @@ export const useAuthStore = create<AuthState>((set, get) => ({
         error: null,
       });
     } catch (err: any) {
-      set({ error: err.message || 'An unexpected error occurred during login', isLoading: false });
-      throw err;
+      const friendlyMessage = normalizeAuthError(err);
+      set({ error: friendlyMessage, isLoading: false });
+      throw new Error(friendlyMessage);
     }
   },
 
@@ -94,6 +125,10 @@ export const useAuthStore = create<AuthState>((set, get) => ({
       }
 
       const data = response.data as any;
+      if (!data?.token) {
+        throw new Error('No authentication token returned by the server.');
+      }
+
       localStorage.setItem(TOKEN_KEY, data.token);
       set({
         token: data.token,
@@ -105,8 +140,9 @@ export const useAuthStore = create<AuthState>((set, get) => ({
         error: null,
       });
     } catch (err: any) {
-      set({ error: err.message || 'An unexpected error occurred during registration', isLoading: false });
-      throw err;
+      const friendlyMessage = normalizeAuthError(err);
+      set({ error: friendlyMessage, isLoading: false });
+      throw new Error(friendlyMessage);
     }
   },
 
@@ -114,10 +150,23 @@ export const useAuthStore = create<AuthState>((set, get) => ({
     set({ isLoading: true, error: null });
     try {
       const redirectUrl = `${window.location.origin}/oauth/callback`;
+      const scopes =
+        provider === 'google'
+          ? 'https://www.googleapis.com/auth/calendar.events https://www.googleapis.com/auth/calendar https://www.googleapis.com/auth/drive.readonly https://www.googleapis.com/auth/userinfo.email https://www.googleapis.com/auth/userinfo.profile'
+          : undefined;
+
       const { error } = await supabase.auth.signInWithOAuth({
         provider,
         options: {
           redirectTo: redirectUrl,
+          scopes,
+          queryParams:
+            provider === 'google'
+              ? {
+                  access_type: 'offline',
+                  prompt: 'consent',
+                }
+              : undefined,
         },
       });
 
@@ -125,16 +174,31 @@ export const useAuthStore = create<AuthState>((set, get) => ({
         throw error;
       }
     } catch (err: any) {
-      set({ error: err.message || `Failed to initiate ${provider} sign in`, isLoading: false });
-      throw err;
+      const friendlyMessage = normalizeAuthError(err);
+      set({ error: friendlyMessage, isLoading: false });
+      throw new Error(friendlyMessage);
     }
   },
 
-  syncSupabaseSession: async (accessToken: string, email?: string, name?: string) => {
+  syncSupabaseSession: async (
+    accessToken: string,
+    email?: string,
+    name?: string,
+    providerToken?: string,
+    providerRefreshToken?: string,
+    provider?: string,
+  ) => {
     set({ isLoading: true, error: null });
     try {
       const response = await authControllerSyncSupabaseSession({
-        body: { accessToken, email, name },
+        body: {
+          accessToken,
+          email,
+          name,
+          providerToken,
+          providerRefreshToken,
+          provider,
+        },
       });
 
       if (response.error) {
@@ -143,6 +207,10 @@ export const useAuthStore = create<AuthState>((set, get) => ({
       }
 
       const data = response.data as any;
+      if (!data?.token) {
+        throw new Error('Invalid response from session synchronization endpoint.');
+      }
+
       localStorage.setItem(TOKEN_KEY, data.token);
       set({
         token: data.token,
@@ -154,8 +222,9 @@ export const useAuthStore = create<AuthState>((set, get) => ({
         error: null,
       });
     } catch (err: any) {
-      set({ error: err.message || 'OAuth session synchronization failed', isLoading: false });
-      throw err;
+      const friendlyMessage = normalizeAuthError(err);
+      set({ error: friendlyMessage, isLoading: false });
+      throw new Error(friendlyMessage);
     }
   },
 
