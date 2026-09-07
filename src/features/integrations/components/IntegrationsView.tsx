@@ -15,10 +15,10 @@ import { Card, CardContent, CardHeader, CardTitle, CardDescription } from '@/com
 import { Badge } from '@/components/ui/badge';
 import {
   integrationsControllerListIntegrations,
-  integrationsControllerGetGoogleAuthUrl,
   integrationsControllerSyncGoogleCalendar,
   integrationsControllerScanRecentTranscripts,
 } from '@/api';
+import { useAuthStore } from '@/stores/auth.store';
 
 interface IntegrationItem {
   id: string;
@@ -29,6 +29,7 @@ interface IntegrationItem {
 }
 
 export const IntegrationsView: React.FC = () => {
+  const { loginWithOAuth } = useAuthStore();
   const [integrations, setIntegrations] = useState<IntegrationItem[]>([]);
   const [isLoading, setIsLoading] = useState(true);
   const [isSyncing, setIsSyncing] = useState(false);
@@ -52,20 +53,14 @@ export const IntegrationsView: React.FC = () => {
     fetchIntegrations();
   }, []);
 
+  const [errorMessage, setErrorMessage] = useState<string | null>(null);
+
   const handleConnectGoogle = async () => {
+    setErrorMessage(null);
     try {
-      const redirectUri = `${window.location.origin}/integrations/google/callback`;
-      const res = await integrationsControllerGetGoogleAuthUrl({
-        query: { redirectUri },
-      });
-      if (res.data) {
-        const data = res.data as any;
-        if (data.url) {
-          window.location.href = data.url;
-        }
-      }
-    } catch (err) {
-      console.error('Failed to initiate Google Calendar connection:', err);
+      await loginWithOAuth('google');
+    } catch (err: any) {
+      setErrorMessage(err?.message || 'Failed to initiate Google Calendar connection');
     }
   };
 
@@ -137,6 +132,13 @@ export const IntegrationsView: React.FC = () => {
         )}
       </div>
 
+      {errorMessage && (
+        <div className="p-4 rounded-2xl bg-destructive/10 border border-destructive/20 text-destructive text-xs space-y-1">
+          <div className="font-bold">Google Calendar Connection Note:</div>
+          <p className="leading-relaxed">{errorMessage}</p>
+        </div>
+      )}
+
       {syncMessage && (
         <div className="p-3.5 rounded-xl bg-primary/10 border border-primary/20 text-primary text-xs flex items-center gap-2">
           <RiCheckboxCircleFill className="w-4 h-4 flex-shrink-0" />
@@ -154,9 +156,15 @@ export const IntegrationsView: React.FC = () => {
                 <FcGoogle className="w-6 h-6" />
               </div>
               {googleIntegration ? (
-                <Badge variant="outline" className="bg-emerald-500/10 text-emerald-500 border-emerald-500/20 text-[10px]">
-                  Connected
-                </Badge>
+                googleIntegration.status === 'ACTIVE' ? (
+                  <Badge variant="outline" className="bg-emerald-500/10 text-emerald-500 border-emerald-500/20 text-[10px]">
+                    Connected
+                  </Badge>
+                ) : (
+                  <Badge variant="outline" className="bg-amber-500/10 text-amber-500 border-amber-500/20 text-[10px]">
+                    Re-auth Required
+                  </Badge>
+                )
               ) : (
                 <Badge variant="secondary" className="text-[10px]">
                   Available
@@ -174,12 +182,25 @@ export const IntegrationsView: React.FC = () => {
                 <div className="text-[11px] text-muted-foreground truncate">
                   Account: <span className="font-semibold text-foreground">{googleIntegration.account || 'Connected'}</span>
                 </div>
+                {googleIntegration.status === 'AUTH_REQUIRED' && (
+                  <div className="p-2.5 rounded-xl bg-amber-500/10 border border-amber-500/20 text-[11px] text-amber-700 dark:text-amber-400 space-y-2">
+                    <p>OAuth session expired or revoked. Please re-authenticate to sync meetings.</p>
+                    <Button
+                      variant="default"
+                      size="sm"
+                      onClick={handleConnectGoogle}
+                      className="w-full h-7 text-xs font-semibold bg-amber-600 hover:bg-amber-700 text-white"
+                    >
+                      Reconnect Google Account
+                    </Button>
+                  </div>
+                )}
                 <div className="flex flex-wrap items-center gap-2">
                   <Button
                     variant="default"
                     size="sm"
                     onClick={handleSyncGoogle}
-                    disabled={isSyncing}
+                    disabled={isSyncing || googleIntegration.status === 'AUTH_REQUIRED'}
                     className="flex-1 h-8 text-xs"
                   >
                     {isSyncing ? <RiLoader4Line className="w-3.5 h-3.5 animate-spin mr-1" /> : <RiRefreshLine className="w-3.5 h-3.5 mr-1" />}
@@ -189,21 +210,23 @@ export const IntegrationsView: React.FC = () => {
                     variant="outline"
                     size="sm"
                     onClick={handleScanTranscripts}
-                    disabled={isSyncing}
+                    disabled={isSyncing || googleIntegration.status === 'AUTH_REQUIRED'}
                     className="h-8 text-xs"
                     title="Scan Google Drive & Calendar for ended meeting transcripts"
                   >
                     {isSyncing ? <RiLoader4Line className="w-3.5 h-3.5 animate-spin mr-1" /> : <RiVideoChatLine className="w-3.5 h-3.5 mr-1 text-primary" />}
                     Scan Transcripts
                   </Button>
-                  <Button
-                    variant="ghost"
-                    size="sm"
-                    onClick={handleConnectGoogle}
-                    className="h-8 text-xs"
-                  >
-                    Reconnect
-                  </Button>
+                  {googleIntegration.status === 'ACTIVE' && (
+                    <Button
+                      variant="ghost"
+                      size="sm"
+                      onClick={handleConnectGoogle}
+                      className="h-8 text-xs"
+                    >
+                      Reconnect
+                    </Button>
+                  )}
                 </div>
               </div>
             ) : (
