@@ -41,16 +41,19 @@ import {
   RiMarkdownLine,
   RiCalendarLine,
   RiShieldCheckLine,
+  RiCloseLine,
 } from 'react-icons/ri';
 import { FcGoogle } from 'react-icons/fc';
 import { SiZoom } from 'react-icons/si';
 import { UploadTranscriptModal } from '@/features/transcripts/components/UploadTranscriptModal';
 import { DeleteMeetingModal } from '@/features/meetings/components/DeleteMeetingModal';
+import { MarkdownRenderer } from '@/components/ui/MarkdownRenderer';
 import { FormattedDiscussion } from './FormattedDiscussion';
 import {
   meetingsControllerGetMeeting,
   integrationsControllerSyncGoogleMeetTranscript,
   documentsControllerExportDocument,
+  intelligenceControllerProcessIntelligence,
 } from '@/api';
 
 interface Participant {
@@ -287,6 +290,38 @@ export const IntelligenceViewer: React.FC = () => {
     }
   };
 
+  const [isProcessingAI, setIsProcessingAI] = useState(false);
+
+  const handleProcessIntelligence = async () => {
+    if (!meeting) return;
+    setIsProcessingAI(true);
+    setSyncStatusMsg(null);
+    try {
+      const response = await intelligenceControllerProcessIntelligence({
+        path: { id: meeting.id },
+      });
+      if (response.data) {
+        setSyncStatusMsg({
+          type: 'success',
+          text: 'AI Intelligence & Executive Summary generated successfully!',
+        });
+        await fetchMeeting();
+      } else if (response.error) {
+        setSyncStatusMsg({
+          type: 'error',
+          text: (response.error as any)?.message || 'Failed to process intelligence',
+        });
+      }
+    } catch (err: any) {
+      setSyncStatusMsg({
+        type: 'error',
+        text: err.message || 'Failed to process intelligence',
+      });
+    } finally {
+      setIsProcessingAI(false);
+    }
+  };
+
   const handleExportDocx = async () => {
     if (!meeting) return;
     try {
@@ -486,6 +521,32 @@ export const IntelligenceViewer: React.FC = () => {
     setTimeout(() => setCopiedSegId(null), 2000);
   };
 
+  const highlightMatches = (text: string, query: string) => {
+    if (!query.trim()) return text;
+    try {
+      const escapedQuery = query.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
+      const regex = new RegExp(`(${escapedQuery})`, 'gi');
+      const parts = text.split(regex);
+      return parts.map((part, i) =>
+        regex.test(part) ? (
+          <mark
+            key={i}
+            className="bg-amber-400/25 text-foreground font-semibold px-0.5 rounded-xs border-b border-amber-400/60"
+          >
+            {part}
+          </mark>
+        ) : (
+          part
+        )
+      );
+    } catch {
+      return text;
+    }
+  };
+
+  const hasTranscript = segments.length > 0;
+  const isConcluded = meeting.status === 'COMPLETED' || hasTranscript;
+
   return (
     <div className="space-y-6 max-w-6xl mx-auto">
       {/* Top Header & Toolbar */}
@@ -524,7 +585,7 @@ export const IntelligenceViewer: React.FC = () => {
               )}
               <span>•</span>
               <span>Source: {meeting.provider || meeting.source || 'Manual'}</span>
-              {meeting.meetingUrl && (
+              {meeting.meetingUrl && !isConcluded && (
                 <>
                   <span>•</span>
                   <a
@@ -542,8 +603,9 @@ export const IntelligenceViewer: React.FC = () => {
           </div>
 
           {/* Action Toolbar */}
-          <div className="flex flex-wrap items-center gap-2">
-            {meeting.meetingUrl && (
+          <div className="flex items-center gap-2 shrink-0">
+            {/* 1. Primary CTA: Join Call (Only for active/upcoming meetings without transcripts) */}
+            {meeting.meetingUrl && !isConcluded && (
               <a
                 href={meeting.meetingUrl}
                 target="_blank"
@@ -557,39 +619,32 @@ export const IntelligenceViewer: React.FC = () => {
               </a>
             )}
 
-            <Button
-              variant="outline"
-              size="sm"
-              onClick={handleSyncGoogleTranscript}
-              disabled={isSyncingGoogle || meeting.status === 'PROCESSING'}
-              className="h-8 text-xs gap-1.5 px-3"
-              title="Fetch transcript Google Doc from Google Drive"
-            >
-              {isSyncingGoogle ? (
-                <RiLoader4Line className="h-3.5 w-3.5 animate-spin text-muted-foreground" />
-              ) : (
-                <FcGoogle className="h-3.5 w-3.5" />
-              )}
-              <span>{isSyncingGoogle ? 'Syncing...' : 'Sync Meet'}</span>
-            </Button>
+            {/* 2. Core Feature Action: Generate AI */}
+            {hasTranscript && (
+              <Button
+                variant="default"
+                size="sm"
+                onClick={handleProcessIntelligence}
+                disabled={isProcessingAI}
+                className="h-8 text-xs gap-1.5 px-3 shadow-xs"
+                title="Generate or re-run AI intelligence extraction"
+              >
+                {isProcessingAI ? (
+                  <RiLoader4Line className="h-3.5 w-3.5 animate-spin text-primary-foreground" />
+                ) : (
+                  <RiSparklingFill className="h-3.5 w-3.5 text-primary-foreground" />
+                )}
+                <span>{isProcessingAI ? 'Analyzing...' : 'Generate AI'}</span>
+              </Button>
+            )}
 
-            <Button
-              variant="outline"
-              size="sm"
-              onClick={() => setIsUploadOpen(true)}
-              className="h-8 text-xs gap-1.5 px-3"
-              title="Upload transcript text or audio"
-            >
-              <RiUploadCloud2Line className="h-3.5 w-3.5 text-muted-foreground" />
-              <span>Upload File</span>
-            </Button>
-
+            {/* 3. Export Dropdown */}
             <DropdownMenu>
               <DropdownMenuTrigger asChild>
                 <Button
                   variant="outline"
                   size="sm"
-                  className="h-8 text-xs gap-1.5 px-3"
+                  className="h-8 text-xs gap-1.5 px-2.5"
                   title="Export options"
                 >
                   <RiDownload2Line className="h-3.5 w-3.5 text-muted-foreground" />
@@ -632,56 +687,76 @@ export const IntelligenceViewer: React.FC = () => {
               </DropdownMenuContent>
             </DropdownMenu>
 
-            <Button
-              variant="outline"
-              size="sm"
-              onClick={handleCopyInvite}
-              className="h-8 text-xs gap-1.5 px-3"
-              title="Copy meeting link"
-            >
-              {copiedLink ? (
-                <>
-                  <RiCheckLine className="w-3.5 h-3.5 text-primary" />
-                  <span className="text-primary font-medium">Copied!</span>
-                </>
-              ) : (
-                <>
-                  <RiFileCopyLine className="w-3.5 h-3.5 text-muted-foreground" />
-                  <span>Copy Link</span>
-                </>
-              )}
-            </Button>
-
-            <DropdownMenu>
-              <DropdownMenuTrigger asChild>
-                <Button
-                  variant="ghost"
-                  size="sm"
-                  className="h-8 w-8 p-0 text-muted-foreground hover:text-foreground"
-                  title="More actions"
-                >
-                  <RiMore2Fill className="h-4 w-4" />
-                </Button>
-              </DropdownMenuTrigger>
-              <DropdownMenuContent align="end" className="w-44 p-1">
-                {meeting.meetingUrl && (
-                  <DropdownMenuItem asChild className="gap-2 py-1.5 cursor-pointer text-xs">
-                    <a href={meeting.meetingUrl} target="_blank" rel="noreferrer">
-                      <RiExternalLinkLine className="w-3.5 h-3.5 text-muted-foreground" />
-                      <span>Open Link</span>
-                    </a>
-                  </DropdownMenuItem>
+            {/* 4. Quick Actions Group (Copy Link + More Dropdown) */}
+            <div className="flex items-center gap-1 border-l border-border pl-2 ml-0.5">
+              <Button
+                variant="ghost"
+                size="sm"
+                onClick={handleCopyInvite}
+                className="h-8 w-8 p-0 text-muted-foreground hover:text-foreground"
+                title={copiedLink ? 'Link copied to clipboard!' : 'Copy meeting link'}
+              >
+                {copiedLink ? (
+                  <RiCheckLine className="w-4 h-4 text-primary transition-all scale-110" />
+                ) : (
+                  <RiFileCopyLine className="w-4 h-4" />
                 )}
-                {meeting.meetingUrl && <DropdownMenuSeparator />}
-                <DropdownMenuItem
-                  onClick={() => setIsDeleteOpen(true)}
-                  className="gap-2 py-1.5 text-destructive focus:text-destructive focus:bg-destructive/10 cursor-pointer text-xs"
-                >
-                  <RiDeleteBin6Line className="w-3.5 h-3.5" />
-                  <span>Delete Meeting</span>
-                </DropdownMenuItem>
-              </DropdownMenuContent>
-            </DropdownMenu>
+              </Button>
+
+              <DropdownMenu>
+                <DropdownMenuTrigger asChild>
+                  <Button
+                    variant="ghost"
+                    size="sm"
+                    className="h-8 w-8 p-0 text-muted-foreground hover:text-foreground"
+                    title="More actions"
+                  >
+                    <RiMore2Fill className="h-4 w-4" />
+                  </Button>
+                </DropdownMenuTrigger>
+                <DropdownMenuContent align="end" className="w-48 p-1">
+                  <DropdownMenuItem
+                    onClick={handleSyncGoogleTranscript}
+                    disabled={isSyncingGoogle || meeting.status === 'PROCESSING'}
+                    className="gap-2 py-2 cursor-pointer text-xs"
+                  >
+                    {isSyncingGoogle ? (
+                      <RiLoader4Line className="w-4 h-4 animate-spin text-muted-foreground" />
+                    ) : (
+                      <FcGoogle className="w-4 h-4" />
+                    )}
+                    <span>Sync Google Meet</span>
+                  </DropdownMenuItem>
+
+                  <DropdownMenuItem
+                    onClick={() => setIsUploadOpen(true)}
+                    className="gap-2 py-2 cursor-pointer text-xs"
+                  >
+                    <RiUploadCloud2Line className="w-4 h-4 text-muted-foreground" />
+                    <span>Upload Transcript</span>
+                  </DropdownMenuItem>
+
+                  {meeting.meetingUrl && (
+                    <DropdownMenuItem asChild className="gap-2 py-2 cursor-pointer text-xs">
+                      <a href={meeting.meetingUrl} target="_blank" rel="noreferrer">
+                        <RiExternalLinkLine className="w-4 h-4 text-muted-foreground" />
+                        <span>Open Meet Link</span>
+                      </a>
+                    </DropdownMenuItem>
+                  )}
+
+                  <DropdownMenuSeparator />
+
+                  <DropdownMenuItem
+                    onClick={() => setIsDeleteOpen(true)}
+                    className="gap-2 py-2 text-destructive focus:text-destructive focus:bg-destructive/10 cursor-pointer text-xs"
+                  >
+                    <RiDeleteBin6Line className="w-4 h-4" />
+                    <span>Delete Meeting</span>
+                  </DropdownMenuItem>
+                </DropdownMenuContent>
+              </DropdownMenu>
+            </div>
           </div>
         </div>
       </div>
@@ -770,7 +845,7 @@ export const IntelligenceViewer: React.FC = () => {
 
       {/* Structured Intelligence Tabs - Linear Style Underline Bar */}
       <Tabs value={activeTab} onValueChange={setActiveTab} className="w-full space-y-6">
-        <TabsList className="w-full justify-start border-b border-border bg-transparent p-0 rounded-none h-10 gap-6 overflow-x-auto flex-nowrap">
+        <TabsList className="w-full justify-start border-b border-border bg-transparent p-0 rounded-none h-10 gap-6 overflow-x-auto flex-nowrap no-scrollbar">
           <TabsTrigger
             value="overview"
             className="rounded-none border-b-2 border-transparent px-1 py-2 text-xs font-medium text-muted-foreground shadow-none data-[state=active]:border-primary data-[state=active]:text-foreground data-[state=active]:bg-transparent transition-colors"
@@ -824,9 +899,10 @@ export const IntelligenceViewer: React.FC = () => {
                 <h3 className="text-xs font-semibold uppercase tracking-wider text-muted-foreground">
                   Overview
                 </h3>
-                <p className="text-sm text-foreground/90 leading-7 font-normal">
-                  {latestSummary.executiveSummary || latestSummary.overview}
-                </p>
+                <MarkdownRenderer
+                  content={latestSummary.executiveSummary || latestSummary.overview || ''}
+                  className="text-sm text-foreground/90 leading-relaxed"
+                />
               </div>
 
               {/* Discussion Breakdown */}
@@ -836,7 +912,10 @@ export const IntelligenceViewer: React.FC = () => {
                     Discussion Breakdown
                   </h3>
                   <div className="p-5 rounded-lg bg-card border border-border">
-                    <FormattedDiscussion content={latestSummary.summary} />
+                    <MarkdownRenderer
+                      content={latestSummary.summary}
+                      className="text-xs text-foreground/85 leading-relaxed"
+                    />
                   </div>
                 </div>
               )}
@@ -940,7 +1019,9 @@ export const IntelligenceViewer: React.FC = () => {
                       </span>
                     )}
                   </div>
-                  <p className="text-xs text-muted-foreground leading-relaxed pl-5">{t.summary}</p>
+                  <div className="pl-5 text-xs text-muted-foreground leading-relaxed">
+                    <MarkdownRenderer content={t.summary} className="text-xs text-muted-foreground" />
+                  </div>
                 </div>
               ))
             ) : (
@@ -1093,39 +1174,59 @@ export const IntelligenceViewer: React.FC = () => {
 
         {/* Tab 7: Full Transcript */}
         <TabsContent value="transcript" className="space-y-4 mt-0">
-          <div className="rounded-lg bg-card border border-border overflow-hidden">
-            <div className="p-3 border-b border-border bg-muted/20 flex flex-col sm:flex-row sm:items-center justify-between gap-3">
+          <div className="rounded-xl bg-card border border-border shadow-xs relative">
+            {/* Elevated Sticky Transcript Search Header */}
+            <div className="sticky top-0 z-10 p-3.5 border-b border-border bg-card/95 backdrop-blur-md flex flex-col sm:flex-row sm:items-center justify-between gap-3 rounded-t-xl">
               <div className="relative flex-1 max-w-md">
-                <RiSearch2Line className="absolute left-3 top-1/2 -translate-y-1/2 w-3.5 h-3.5 text-muted-foreground" />
+                <RiSearch2Line className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-muted-foreground pointer-events-none" />
                 <input
                   type="text"
                   value={transcriptSearch}
                   onChange={(e) => setTranscriptSearch(e.target.value)}
-                  placeholder="Search transcript..."
-                  className="w-full pl-8.5 pr-3 py-1 text-xs rounded-md border border-border bg-background outline-hidden focus:border-primary"
+                  placeholder="Search transcript, keywords, or speakers..."
+                  className="w-full pl-9 pr-8 py-1.5 text-xs rounded-lg border border-border bg-background outline-hidden focus:ring-2 focus:ring-primary/20 focus:border-primary transition-all placeholder:text-muted-foreground text-foreground"
                 />
+                {transcriptSearch && (
+                  <button
+                    type="button"
+                    onClick={() => setTranscriptSearch('')}
+                    className="absolute right-2.5 top-1/2 -translate-y-1/2 text-muted-foreground hover:text-foreground h-5 w-5 rounded-full hover:bg-muted flex items-center justify-center transition-colors cursor-pointer"
+                    title="Clear search"
+                  >
+                    <RiCloseLine className="w-3.5 h-3.5" />
+                  </button>
+                )}
               </div>
-              <span className="text-[11px] text-muted-foreground font-mono shrink-0">
-                {filteredSegments.length} of {segments.length} segments
-              </span>
+
+              <div className="flex items-center gap-2">
+                {transcriptSearch.trim() && (
+                  <span className="text-[11px] font-medium px-2 py-0.5 rounded-md bg-primary/10 text-primary border border-primary/20 animate-in fade-in-50">
+                    {filteredSegments.length} match{filteredSegments.length === 1 ? '' : 'es'}
+                  </span>
+                )}
+                <span className="text-[11px] text-muted-foreground font-mono bg-muted/50 px-2.5 py-1 rounded-md border border-border/60 shrink-0">
+                  {filteredSegments.length} of {segments.length} segments
+                </span>
+              </div>
             </div>
 
-            <div className="p-4 space-y-3 divide-y divide-border/60 max-h-[640px] overflow-y-auto">
+            {/* Transcript Stream (Flows naturally with page scroll) */}
+            <div className="p-4 sm:p-5 space-y-3 divide-y divide-border/50">
               {filteredSegments.length > 0 ? (
                 filteredSegments.map((seg) => {
                   const isCopied = copiedSegId === seg.id;
                   return (
                     <div
                       key={seg.id}
-                      className="pt-3 first:pt-0 group text-xs space-y-1"
+                      className="pt-3 first:pt-0 group text-xs space-y-1 hover:bg-muted/10 -mx-2 px-2 py-1.5 rounded-lg transition-colors"
                     >
                       <div className="flex items-center justify-between gap-2">
                         <div className="flex items-center gap-2">
-                          <span className="text-[11px] font-mono text-muted-foreground">
+                          <span className="text-[10px] font-mono text-muted-foreground bg-muted/60 px-1.5 py-0.5 rounded border border-border/50">
                             [{formatTime(seg.startTimeMs)}]
                           </span>
                           <span className="font-semibold text-foreground">
-                            {seg.speakerName}
+                            {highlightMatches(seg.speakerName, transcriptSearch)}
                           </span>
                         </div>
 
@@ -1133,24 +1234,54 @@ export const IntelligenceViewer: React.FC = () => {
                           variant="ghost"
                           size="sm"
                           onClick={() => handleCopySegment(seg)}
-                          className="h-5 text-[10px] px-1.5 opacity-0 group-hover:opacity-100 transition-opacity text-muted-foreground hover:text-foreground"
-                          title="Copy text"
+                          className="h-5 text-[10px] px-1.5 opacity-0 group-hover:opacity-100 transition-opacity text-muted-foreground hover:text-foreground cursor-pointer"
+                          title="Copy line"
                         >
-                          {isCopied ? 'Copied' : 'Copy'}
+                          {isCopied ? (
+                            <span className="text-primary flex items-center gap-1 font-medium">
+                              <RiCheckLine className="w-3 h-3" /> Copied
+                            </span>
+                          ) : (
+                            <span className="flex items-center gap-1">
+                              <RiFileCopyLine className="w-3 h-3" /> Copy
+                            </span>
+                          )}
                         </Button>
                       </div>
-                      <p className="text-foreground/85 leading-relaxed pl-1 whitespace-pre-wrap font-sans text-xs">
-                        {seg.text}
+                      <p className="text-foreground/90 leading-relaxed pl-1 whitespace-pre-wrap font-sans text-xs">
+                        {highlightMatches(seg.text, transcriptSearch)}
                       </p>
                     </div>
                   );
                 })
               ) : (
-                <p className="text-xs text-muted-foreground p-8 text-center italic">
-                  {segments.length === 0
-                    ? 'No transcript segments available.'
-                    : 'No segments match your search.'}
-                </p>
+                <div className="p-8 text-center space-y-3">
+                  <div className="w-10 h-10 rounded-full bg-muted/60 border border-border flex items-center justify-center mx-auto text-muted-foreground">
+                    <RiSearch2Line className="w-4 h-4" />
+                  </div>
+                  <div className="space-y-1">
+                    <p className="text-xs font-medium text-foreground">
+                      {segments.length === 0
+                        ? 'No transcript segments available.'
+                        : `No segments matching "${transcriptSearch}"`}
+                    </p>
+                    {transcriptSearch && (
+                      <p className="text-[11px] text-muted-foreground">
+                        Try searching with different keywords or speaker names.
+                      </p>
+                    )}
+                  </div>
+                  {transcriptSearch && (
+                    <Button
+                      variant="outline"
+                      size="sm"
+                      onClick={() => setTranscriptSearch('')}
+                      className="h-7 text-xs px-3"
+                    >
+                      Clear Search
+                    </Button>
+                  )}
+                </div>
               )}
             </div>
           </div>
