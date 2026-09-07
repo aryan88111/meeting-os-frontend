@@ -17,6 +17,7 @@ import {
   integrationsControllerListIntegrations,
   meetingsControllerCreateMeeting,
 } from '@/api';
+import { useAuthStore } from '@/stores/auth.store';
 
 interface ScheduleMeetingModalProps {
   isOpen: boolean;
@@ -36,6 +37,7 @@ export const ScheduleMeetingModal: React.FC<ScheduleMeetingModalProps> = ({
   onSuccess,
   initialDate,
 }) => {
+  const { loginWithOAuth } = useAuthStore();
   const [title, setTitle] = useState('');
   const [description, setDescription] = useState('');
   const [provider, setProvider] = useState<'GOOGLE_MEET' | 'ZOOM' | 'MICROSOFT_TEAMS' | 'MANUAL'>('GOOGLE_MEET');
@@ -50,6 +52,7 @@ export const ScheduleMeetingModal: React.FC<ScheduleMeetingModalProps> = ({
   const [isLoading, setIsLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [googleAccount, setGoogleAccount] = useState<string | null>(null);
+  const [googleStatus, setGoogleStatus] = useState<'ACTIVE' | 'AUTH_REQUIRED' | 'DISCONNECTED' | 'LOADING'>('LOADING');
 
   // Check if Google is connected
   React.useEffect(() => {
@@ -57,14 +60,30 @@ export const ScheduleMeetingModal: React.FC<ScheduleMeetingModalProps> = ({
       integrationsControllerListIntegrations()
         .then((res) => {
           if (res.data) {
-            const data = res.data as { integrations?: any[] };
-            const g = (data.integrations || []).find((i: any) => i.provider === 'GOOGLE_MEET' && i.status === 'ACTIVE');
-            if (g) setGoogleAccount(g.account || 'Connected');
+            const data = res.data as any;
+            const g = (data.integrations || []).find((i: any) => i.provider === 'GOOGLE_MEET');
+            if (g) {
+              setGoogleAccount(g.account || 'Connected');
+              setGoogleStatus(g.status === 'ACTIVE' ? 'ACTIVE' : 'AUTH_REQUIRED');
+            } else {
+              setGoogleStatus('DISCONNECTED');
+            }
           }
         })
-        .catch(() => {});
+        .catch(() => {
+          setGoogleStatus('DISCONNECTED');
+        });
     }
   }, [isOpen]);
+
+  const handleConnectGoogle = async () => {
+    setError(null);
+    try {
+      await loginWithOAuth('google');
+    } catch (err: any) {
+      setError(err?.message || 'Failed to initiate Google Calendar connection');
+    }
+  };
 
   if (!isOpen) return null;
 
@@ -264,21 +283,52 @@ export const ScheduleMeetingModal: React.FC<ScheduleMeetingModalProps> = ({
             </div>
 
             {autoGenerateLink ? (
-              <div className="space-y-1">
+              <div className="space-y-1.5">
                 <p className="text-[11px] text-muted-foreground leading-relaxed">
                   {provider === 'GOOGLE_MEET' && (
-                    googleAccount
-                      ? `✓ Publishing to your Google Calendar (${googleAccount}) with Google Meet link & attendee invites.`
-                      : '⚡ MeetingOS will generate a Google Meet call and link it to your meeting schedule.'
+                    googleStatus === 'ACTIVE'
+                      ? `✓ Publishing to your Google Calendar (${googleAccount}) with genuine Google Meet room & attendee invitations.`
+                      : '⚡ Connect your Google Calendar below to create official Google Meet rooms and dispatch Calendar invitations.'
                   )}
                   {provider === 'ZOOM' && '⚡ MeetingOS will automatically provision a Zoom meeting ID with security passcode.'}
                   {provider === 'MICROSOFT_TEAMS' && '⚡ MeetingOS will generate an official Microsoft Teams join link.'}
-                  {provider === 'MANUAL' && '⚡ MeetingOS will generate a direct instant video room.'}
+                  {provider === 'MANUAL' && '⚡ MeetingOS will generate a persistent shared room so all attendees join the same call.'}
                 </p>
-                {provider === 'GOOGLE_MEET' && googleAccount && (
+
+                {provider === 'GOOGLE_MEET' && googleStatus === 'ACTIVE' && (
                   <span className="inline-block px-2 py-0.5 rounded-md bg-emerald-500/10 text-emerald-600 dark:text-emerald-400 text-[10px] font-semibold">
-                    ✓ Google Calendar Linked
+                    ✓ Google Calendar Connected & Active
                   </span>
+                )}
+
+                {provider === 'GOOGLE_MEET' && googleStatus === 'AUTH_REQUIRED' && (
+                  <div className="p-2 rounded-lg bg-amber-500/10 border border-amber-500/20 text-xs flex items-center justify-between gap-2">
+                    <span className="text-amber-700 dark:text-amber-400 text-[11px]">
+                      Google session expired. Reconnect to generate official Google Meet links.
+                    </span>
+                    <button
+                      type="button"
+                      onClick={handleConnectGoogle}
+                      className="px-2.5 py-1 rounded-md bg-primary text-primary-foreground text-[10px] font-semibold hover:opacity-90 transition whitespace-nowrap"
+                    >
+                      Reconnect Google
+                    </button>
+                  </div>
+                )}
+
+                {provider === 'GOOGLE_MEET' && googleStatus === 'DISCONNECTED' && (
+                  <div className="p-2 rounded-lg bg-muted border border-border text-xs flex items-center justify-between gap-2">
+                    <span className="text-muted-foreground text-[11px]">
+                      Google Calendar not connected.
+                    </span>
+                    <button
+                      type="button"
+                      onClick={handleConnectGoogle}
+                      className="px-2.5 py-1 rounded-md bg-primary text-primary-foreground text-[10px] font-semibold hover:opacity-90 transition whitespace-nowrap"
+                    >
+                      Connect Google
+                    </button>
+                  </div>
                 )}
               </div>
             ) : (
