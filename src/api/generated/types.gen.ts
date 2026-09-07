@@ -47,6 +47,18 @@ export type SupabaseSyncDto = {
      * Avatar URL
      */
     avatarUrl?: string;
+    /**
+     * Provider OAuth access token (e.g. Google Access Token)
+     */
+    providerToken?: string;
+    /**
+     * Provider OAuth refresh token (e.g. Google Refresh Token)
+     */
+    providerRefreshToken?: string;
+    /**
+     * OAuth provider name
+     */
+    provider?: string;
 };
 
 export type GoogleAuthCallbackDto = {
@@ -175,6 +187,39 @@ export type UploadAndCreateMeetingDto = {
      * Meeting description
      */
     description?: string;
+};
+
+export type AskKnowledgeBaseDto = {
+    /**
+     * Natural language question to ask across workspace meeting intelligence
+     */
+    query: string;
+    /**
+     * Optional existing chat session ID to continue conversation
+     */
+    sessionId?: string;
+};
+
+export type RenameSessionDto = {
+    /**
+     * New session title
+     */
+    title: string;
+};
+
+export type CreateApiKeyDto = {
+    /**
+     * Name or label for the API Key
+     */
+    name: string;
+    /**
+     * Array of permitted scopes
+     */
+    scopes?: Array<string>;
+    /**
+     * Optional expiration in days (e.g., 30, 90, 365)
+     */
+    expiresInDays?: number;
 };
 
 export type AuthControllerRegisterData = {
@@ -327,6 +372,19 @@ export type IntegrationsControllerScanRecentTranscriptsResponses = {
     200: unknown;
 };
 
+export type IntegrationsControllerPushMeetingToGoogleCalendarData = {
+    body?: never;
+    path: {
+        meetingId: string;
+    };
+    query?: never;
+    url: '/api/v1/integrations/google/push-meeting/{meetingId}';
+};
+
+export type IntegrationsControllerPushMeetingToGoogleCalendarResponses = {
+    200: unknown;
+};
+
 export type IntegrationsControllerListIntegrationsData = {
     body?: never;
     path?: never;
@@ -335,6 +393,97 @@ export type IntegrationsControllerListIntegrationsData = {
 };
 
 export type IntegrationsControllerListIntegrationsResponses = {
+    200: unknown;
+};
+
+export type IntelligenceControllerProcessIntelligenceData = {
+    body?: never;
+    path: {
+        id: string;
+    };
+    query?: never;
+    url: '/api/v1/meetings/{id}/intelligence/process';
+};
+
+export type IntelligenceControllerProcessIntelligenceResponses = {
+    201: unknown;
+};
+
+export type IntelligenceControllerGetSummaryData = {
+    body?: never;
+    path: {
+        id: string;
+    };
+    query?: never;
+    url: '/api/v1/meetings/{id}/intelligence/summary';
+};
+
+export type IntelligenceControllerGetSummaryResponses = {
+    200: unknown;
+};
+
+export type IntelligenceControllerGetTopicsData = {
+    body?: never;
+    path: {
+        id: string;
+    };
+    query?: never;
+    url: '/api/v1/meetings/{id}/intelligence/topics';
+};
+
+export type IntelligenceControllerGetTopicsResponses = {
+    200: unknown;
+};
+
+export type IntelligenceControllerGetDecisionsData = {
+    body?: never;
+    path: {
+        id: string;
+    };
+    query?: never;
+    url: '/api/v1/meetings/{id}/intelligence/decisions';
+};
+
+export type IntelligenceControllerGetDecisionsResponses = {
+    200: unknown;
+};
+
+export type IntelligenceControllerGetActionItemsData = {
+    body?: never;
+    path: {
+        id: string;
+    };
+    query?: never;
+    url: '/api/v1/meetings/{id}/intelligence/action-items';
+};
+
+export type IntelligenceControllerGetActionItemsResponses = {
+    200: unknown;
+};
+
+export type IntelligenceControllerGetRisksData = {
+    body?: never;
+    path: {
+        id: string;
+    };
+    query?: never;
+    url: '/api/v1/meetings/{id}/intelligence/risks';
+};
+
+export type IntelligenceControllerGetRisksResponses = {
+    200: unknown;
+};
+
+export type IntelligenceControllerGetOpenQuestionsData = {
+    body?: never;
+    path: {
+        id: string;
+    };
+    query?: never;
+    url: '/api/v1/meetings/{id}/intelligence/questions';
+};
+
+export type IntelligenceControllerGetOpenQuestionsResponses = {
     200: unknown;
 };
 
@@ -535,58 +684,6 @@ export type TranscriptsControllerUploadAndCreateResponses = {
     201: unknown;
 };
 
-export type IntelligenceControllerGetSummaryData = {
-    body?: never;
-    path: {
-        id: string;
-    };
-    query?: never;
-    url: '/api/v1/meetings/{id}/intelligence/summary';
-};
-
-export type IntelligenceControllerGetSummaryResponses = {
-    200: unknown;
-};
-
-export type IntelligenceControllerGetDecisionsData = {
-    body?: never;
-    path: {
-        id: string;
-    };
-    query?: never;
-    url: '/api/v1/meetings/{id}/intelligence/decisions';
-};
-
-export type IntelligenceControllerGetDecisionsResponses = {
-    200: unknown;
-};
-
-export type IntelligenceControllerGetActionItemsData = {
-    body?: never;
-    path: {
-        id: string;
-    };
-    query?: never;
-    url: '/api/v1/meetings/{id}/intelligence/action-items';
-};
-
-export type IntelligenceControllerGetActionItemsResponses = {
-    200: unknown;
-};
-
-export type IntelligenceControllerGetRisksData = {
-    body?: never;
-    path: {
-        id: string;
-    };
-    query?: never;
-    url: '/api/v1/meetings/{id}/intelligence/risks';
-};
-
-export type IntelligenceControllerGetRisksResponses = {
-    200: unknown;
-};
-
 export type DocumentsControllerGetDocumentsData = {
     body?: never;
     path: {
@@ -628,6 +725,126 @@ export type SearchControllerSearchMeetingsData = {
 };
 
 export type SearchControllerSearchMeetingsResponses = {
+    200: unknown;
+};
+
+export type SearchControllerAskKnowledgeBaseData = {
+    body: AskKnowledgeBaseDto;
+    path?: never;
+    query?: never;
+    url: '/api/v1/search/ask';
+};
+
+export type SearchControllerAskKnowledgeBaseResponses = {
+    201: unknown;
+};
+
+export type SearchControllerListSessionsData = {
+    body?: never;
+    path?: never;
+    query?: never;
+    url: '/api/v1/search/sessions';
+};
+
+export type SearchControllerListSessionsResponses = {
+    200: unknown;
+};
+
+export type SearchControllerDeleteSessionData = {
+    body?: never;
+    path: {
+        id: string;
+    };
+    query?: never;
+    url: '/api/v1/search/sessions/{id}';
+};
+
+export type SearchControllerDeleteSessionResponses = {
+    200: unknown;
+};
+
+export type SearchControllerGetSessionData = {
+    body?: never;
+    path: {
+        id: string;
+    };
+    query?: never;
+    url: '/api/v1/search/sessions/{id}';
+};
+
+export type SearchControllerGetSessionResponses = {
+    200: unknown;
+};
+
+export type SearchControllerRenameSessionData = {
+    body: RenameSessionDto;
+    path: {
+        id: string;
+    };
+    query?: never;
+    url: '/api/v1/search/sessions/{id}';
+};
+
+export type SearchControllerRenameSessionResponses = {
+    200: unknown;
+};
+
+export type ApiKeysControllerListKeysData = {
+    body?: never;
+    path?: never;
+    query?: never;
+    url: '/api/v1/api-keys';
+};
+
+export type ApiKeysControllerListKeysResponses = {
+    200: unknown;
+};
+
+export type ApiKeysControllerCreateKeyData = {
+    body: CreateApiKeyDto;
+    path?: never;
+    query?: never;
+    url: '/api/v1/api-keys';
+};
+
+export type ApiKeysControllerCreateKeyResponses = {
+    201: unknown;
+};
+
+export type ApiKeysControllerGetUsageStatsData = {
+    body?: never;
+    path?: never;
+    query?: never;
+    url: '/api/v1/api-keys/usage';
+};
+
+export type ApiKeysControllerGetUsageStatsResponses = {
+    200: unknown;
+};
+
+export type ApiKeysControllerRevokeKeyData = {
+    body?: never;
+    path: {
+        id: string;
+    };
+    query?: never;
+    url: '/api/v1/api-keys/{id}/revoke';
+};
+
+export type ApiKeysControllerRevokeKeyResponses = {
+    200: unknown;
+};
+
+export type ApiKeysControllerDeleteKeyData = {
+    body?: never;
+    path: {
+        id: string;
+    };
+    query?: never;
+    url: '/api/v1/api-keys/{id}';
+};
+
+export type ApiKeysControllerDeleteKeyResponses = {
     200: unknown;
 };
 
