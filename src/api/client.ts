@@ -1,11 +1,28 @@
 import { client } from './generated/client.gen';
 
 /**
+ * Resolve API base URL.
+ * - In production: uses VITE_API_URL or defaults to backend server.
+ * - In development: uses VITE_API_URL if explicitly set, otherwise defaults to ''
+ *   so requests route seamlessly through Vite's dev server proxy to http://localhost:8000,
+ *   avoiding CORS and port mismatch issues.
+ */
+const resolveBaseUrl = (): string => {
+  if (import.meta.env.VITE_API_URL) {
+    return import.meta.env.VITE_API_URL;
+  }
+  if (import.meta.env.DEV) {
+    return '';
+  }
+  return 'http://localhost:8000';
+};
+
+/**
  * Configure default Hey API Fetch client instance.
  * Automatically injects authentication bearer token from localStorage.
  */
 client.setConfig({
-  baseUrl: import.meta.env.VITE_API_URL || 'http://localhost:8000',
+  baseUrl: resolveBaseUrl(),
 });
 
 // Configure auth interceptors
@@ -17,5 +34,6 @@ client.interceptors.request.use((request) => {
   return request;
 });
 
-export { client as apiClient };
+export { client as apiClient, resolveBaseUrl };
 export * from './generated';
+
