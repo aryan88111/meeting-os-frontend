@@ -5,13 +5,22 @@ import { AuthLayout } from './AuthLayout';
 import { FiMail, FiLock, FiAlertCircle, FiLoader, FiGithub } from 'react-icons/fi';
 import { FcGoogle } from 'react-icons/fc';
 
+const MicrosoftIcon: React.FC<{ className?: string }> = ({ className = 'w-4 h-4' }) => (
+  <svg className={className} viewBox="0 0 21 21">
+    <rect x="1" y="1" width="9" height="9" fill="#f25022" />
+    <rect x="11" y="1" width="9" height="9" fill="#7fba00" />
+    <rect x="1" y="11" width="9" height="9" fill="#00a4ef" />
+    <rect x="11" y="11" width="9" height="9" fill="#ffb900" />
+  </svg>
+);
+
 export const LoginForm: React.FC = () => {
   const navigate = useNavigate();
   const { login, loginWithOAuth, isLoading, error, clearError } = useAuthStore();
 
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
-  const [oauthLoading, setOauthLoading] = useState<'google' | 'github' | null>(null);
+  const [oauthLoading, setOauthLoading] = useState<'google' | 'github' | 'azure' | null>(null);
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -26,7 +35,7 @@ export const LoginForm: React.FC = () => {
     }
   };
 
-  const handleOAuth = async (provider: 'google' | 'github') => {
+  const handleOAuth = async (provider: 'google' | 'github' | 'azure') => {
     clearError();
     setOauthLoading(provider);
     try {
@@ -50,32 +59,48 @@ export const LoginForm: React.FC = () => {
         )}
 
         {/* OAuth Buttons */}
-        <div className="grid grid-cols-2 gap-3">
+        <div className="grid grid-cols-3 gap-2">
           <button
             type="button"
             disabled={isLoading || oauthLoading !== null}
             onClick={() => handleOAuth('google')}
-            className="flex items-center justify-center gap-2.5 px-4 py-2.5 rounded-xl border border-border bg-background hover:bg-muted/60 transition-colors text-sm font-medium disabled:opacity-50"
+            className="flex items-center justify-center gap-2 px-3 py-2.5 rounded-xl border border-border bg-background hover:bg-muted/60 transition-colors text-xs font-medium disabled:opacity-50"
+            title="Sign in with Google"
           >
             {oauthLoading === 'google' ? (
               <FiLoader className="w-4 h-4 animate-spin text-primary" />
             ) : (
-              <FcGoogle className="w-4 h-4" />
+              <FcGoogle className="w-4 h-4 shrink-0" />
             )}
-            Google
+            <span>Google</span>
+          </button>
+          <button
+            type="button"
+            disabled={isLoading || oauthLoading !== null}
+            onClick={() => handleOAuth('azure')}
+            className="flex items-center justify-center gap-2 px-3 py-2.5 rounded-xl border border-border bg-background hover:bg-muted/60 transition-colors text-xs font-medium disabled:opacity-50"
+            title="Sign in with Microsoft"
+          >
+            {oauthLoading === 'azure' ? (
+              <FiLoader className="w-4 h-4 animate-spin text-primary" />
+            ) : (
+              <MicrosoftIcon className="w-4 h-4 shrink-0" />
+            )}
+            <span>Microsoft</span>
           </button>
           <button
             type="button"
             disabled={isLoading || oauthLoading !== null}
             onClick={() => handleOAuth('github')}
-            className="flex items-center justify-center gap-2.5 px-4 py-2.5 rounded-xl border border-border bg-background hover:bg-muted/60 transition-colors text-sm font-medium disabled:opacity-50"
+            className="flex items-center justify-center gap-2 px-3 py-2.5 rounded-xl border border-border bg-background hover:bg-muted/60 transition-colors text-xs font-medium disabled:opacity-50"
+            title="Sign in with GitHub"
           >
             {oauthLoading === 'github' ? (
               <FiLoader className="w-4 h-4 animate-spin text-primary" />
             ) : (
-              <FiGithub className="w-4 h-4" />
+              <FiGithub className="w-4 h-4 shrink-0" />
             )}
-            GitHub
+            <span>GitHub</span>
           </button>
         </div>
 

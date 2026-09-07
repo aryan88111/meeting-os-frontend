@@ -57,12 +57,53 @@ export const MeetingListView: React.FC = () => {
   const [isUploadOpen, setIsUploadOpen] = useState(false);
   const [meetingToDelete, setMeetingToDelete] = useState<MeetingItem | null>(null);
   const [copiedId, setCopiedId] = useState<string | null>(null);
+  const [copiedEmailMeetingId, setCopiedEmailMeetingId] = useState<string | null>(null);
+
+  const copyToClipboard = async (text: string) => {
+    if (navigator.clipboard && window.isSecureContext) {
+      try {
+        await navigator.clipboard.writeText(text);
+        return true;
+      } catch (err) {
+        console.warn('Clipboard API error:', err);
+      }
+    }
+    const textArea = document.createElement('textarea');
+    textArea.value = text;
+    textArea.style.position = 'fixed';
+    textArea.style.opacity = '0';
+    document.body.appendChild(textArea);
+    textArea.focus();
+    textArea.select();
+    try {
+      document.execCommand('copy');
+      document.body.removeChild(textArea);
+      return true;
+    } catch (e) {
+      document.body.removeChild(textArea);
+      return false;
+    }
+  };
 
   const handleCopyMeetingUrl = (id: string, url?: string) => {
     if (!url) return;
-    navigator.clipboard.writeText(url);
+    copyToClipboard(url);
     setCopiedId(id);
     setTimeout(() => setCopiedId(null), 2000);
+  };
+
+  const handleCopyAttendeeEmails = (meeting: MeetingItem, e?: React.MouseEvent) => {
+    if (e) {
+      e.preventDefault();
+      e.stopPropagation();
+    }
+    const emails = meeting.participants
+      .filter((p) => p.email && p.email.trim())
+      .map((p) => p.email!.trim());
+    if (emails.length === 0) return;
+    copyToClipboard(emails.join(', '));
+    setCopiedEmailMeetingId(meeting.id);
+    setTimeout(() => setCopiedEmailMeetingId(null), 2000);
   };
 
   const fetchMeetings = useCallback(async () => {
@@ -265,11 +306,38 @@ export const MeetingListView: React.FC = () => {
                     )}
 
                     {meeting.participants.length > 0 && (
-                      <span className="flex items-center gap-1">
-                        <RiGroupLine className="w-3.5 h-3.5" />
-                        {meeting.participants.map((p) => p.name).slice(0, 3).join(', ')}
-                        {meeting.participants.length > 3 && ` +${meeting.participants.length - 3}`}
-                      </span>
+                      <div className="flex items-center gap-1">
+                        <span
+                          className="flex items-center gap-1 cursor-default"
+                          title={meeting.participants.map((p) => (p.email ? `${p.name} (${p.email})` : p.name)).join(', ')}
+                        >
+                          <RiGroupLine className="w-3.5 h-3.5 text-primary" />
+                          <span>
+                            {meeting.participants
+                              .map((p) => (p.email ? `${p.name} (${p.email})` : p.name))
+                              .slice(0, 2)
+                              .join(', ')}
+                            {meeting.participants.length > 2 && ` +${meeting.participants.length - 2} more`}
+                          </span>
+                        </span>
+                        {meeting.participants.some((p) => p.email) && (
+                          <Button
+                            variant="ghost"
+                            size="sm"
+                            onClick={(e) => handleCopyAttendeeEmails(meeting, e)}
+                            className="h-5 px-1 text-[10px] text-muted-foreground hover:text-foreground cursor-pointer"
+                            title="Copy attendee email(s)"
+                          >
+                            {copiedEmailMeetingId === meeting.id ? (
+                              <span className="text-emerald-500 font-medium flex items-center gap-0.5">
+                                <RiCheckLine className="w-3 h-3" /> Copied
+                              </span>
+                            ) : (
+                              <RiFileCopyLine className="w-3 h-3" />
+                            )}
+                          </Button>
+                        )}
+                      </div>
                     )}
 
                     {meeting.meetingUrl && (

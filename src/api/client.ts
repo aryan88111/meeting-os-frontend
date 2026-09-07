@@ -37,3 +37,16 @@ client.interceptors.request.use((request) => {
 export { client as apiClient, resolveBaseUrl };
 export * from './generated';
 
+// Microsoft Teams & Graph API Endpoints
+export const integrationsControllerSyncMicrosoftCalendar = async () => {
+  return client.post({ url: '/api/v1/integrations/microsoft/sync' });
+};
+
+export const integrationsControllerSyncMicrosoftTeamsTranscript = async (data: { path: { meetingId: string } }) => {
+  return client.post({ url: `/api/v1/integrations/microsoft/sync-transcript/${data.path.meetingId}` });
+};
+
+export const integrationsControllerScanRecentMicrosoftTranscripts = async () => {
+  return client.post({ url: '/api/v1/integrations/microsoft/scan-transcripts' });
+};
+

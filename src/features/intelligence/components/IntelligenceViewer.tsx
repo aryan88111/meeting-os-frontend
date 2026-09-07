@@ -42,6 +42,7 @@ import {
   RiCalendarLine,
   RiShieldCheckLine,
   RiCloseLine,
+  RiMailLine,
 } from 'react-icons/ri';
 import { FcGoogle } from 'react-icons/fc';
 import { SiZoom } from 'react-icons/si';
@@ -52,6 +53,7 @@ import { FormattedDiscussion } from './FormattedDiscussion';
 import {
   meetingsControllerGetMeeting,
   integrationsControllerSyncGoogleMeetTranscript,
+  integrationsControllerSyncMicrosoftTeamsTranscript,
   documentsControllerExportDocument,
   intelligenceControllerProcessIntelligence,
 } from '@/api';
@@ -195,15 +197,62 @@ export const IntelligenceViewer: React.FC = () => {
   const [meeting, setMeeting] = useState<MeetingDetails | null>(null);
   const [isLoading, setIsLoading] = useState(true);
   const [isSyncingGoogle, setIsSyncingGoogle] = useState(false);
+  const [isSyncingMicrosoft, setIsSyncingMicrosoft] = useState(false);
   const [syncStatusMsg, setSyncStatusMsg] = useState<{ type: 'success' | 'error'; text: string } | null>(null);
   const [isUploadOpen, setIsUploadOpen] = useState(false);
   const [isDeleteOpen, setIsDeleteOpen] = useState(false);
   const [copiedLink, setCopiedLink] = useState(false);
   const [copiedSegId, setCopiedSegId] = useState<string | null>(null);
+  const [copiedEmailKey, setCopiedEmailKey] = useState<string | null>(null);
   const [activeTab, setActiveTab] = useState('overview');
   const [transcriptSearch, setTranscriptSearch] = useState('');
 
   const pollingRef = useRef<ReturnType<typeof setInterval> | null>(null);
+
+  const copyToClipboard = async (text: string) => {
+    if (navigator.clipboard && window.isSecureContext) {
+      try {
+        await navigator.clipboard.writeText(text);
+        return true;
+      } catch (err) {
+        console.warn('Clipboard API failed, trying execCommand fallback:', err);
+      }
+    }
+    const textArea = document.createElement('textarea');
+    textArea.value = text;
+    textArea.style.position = 'fixed';
+    textArea.style.opacity = '0';
+    document.body.appendChild(textArea);
+    textArea.focus();
+    textArea.select();
+    try {
+      document.execCommand('copy');
+      document.body.removeChild(textArea);
+      return true;
+    } catch (e) {
+      document.body.removeChild(textArea);
+      return false;
+    }
+  };
+
+  const handleCopyEmail = (email: string, key: string, e?: React.MouseEvent) => {
+    if (e) e.stopPropagation();
+    copyToClipboard(email);
+    setCopiedEmailKey(key);
+    setTimeout(() => setCopiedEmailKey(null), 2000);
+  };
+
+  const handleCopyAllEmails = (e?: React.MouseEvent) => {
+    if (e) e.stopPropagation();
+    if (!meeting?.participants) return;
+    const emails = meeting.participants
+      .filter((p) => p.email && p.email.trim())
+      .map((p) => p.email!.trim());
+    if (emails.length === 0) return;
+    copyToClipboard(emails.join(', '));
+    setCopiedEmailKey('all-emails');
+    setTimeout(() => setCopiedEmailKey(null), 2000);
+  };
 
   const handleCopyInvite = () => {
     if (!meeting) return;
@@ -211,7 +260,7 @@ export const IntelligenceViewer: React.FC = () => {
       ? `Meeting: ${meeting.title}\nTime: ${formatMeetingDate(meeting.startTime || meeting.createdAt)}\nJoin Video Call: ${meeting.meetingUrl}`
       : `Meeting: ${meeting.title}\nTime: ${formatMeetingDate(meeting.startTime || meeting.createdAt)}`;
 
-    navigator.clipboard.writeText(text);
+    copyToClipboard(text);
     setCopiedLink(true);
     setTimeout(() => setCopiedLink(false), 2500);
   };
@@ -287,6 +336,41 @@ export const IntelligenceViewer: React.FC = () => {
       });
     } finally {
       setIsSyncingGoogle(false);
+    }
+  };
+
+  // Trigger Microsoft Teams transcript pull
+  const handleSyncMicrosoftTranscript = async () => {
+    if (!id) return;
+    setIsSyncingMicrosoft(true);
+    setSyncStatusMsg(null);
+
+    try {
+      const response = await integrationsControllerSyncMicrosoftTeamsTranscript({
+        path: { meetingId: id },
+      });
+
+      if (response.error) {
+        const errData = response.error as any;
+        setSyncStatusMsg({
+          type: 'error',
+          text: errData?.message || 'Could not find Microsoft Teams transcript yet. Ensure transcription was started in Teams and has finalized.',
+        });
+      } else {
+        const data = response.data as any;
+        setSyncStatusMsg({
+          type: 'success',
+          text: data?.message || 'Microsoft Teams transcript fetched! AI extraction queued.',
+        });
+        fetchMeeting();
+      }
+    } catch (err: any) {
+      setSyncStatusMsg({
+        type: 'error',
+        text: err.message || 'Network error syncing transcript from Microsoft Teams',
+      });
+    } finally {
+      setIsSyncingMicrosoft(false);
     }
   };
 
@@ -547,6 +631,96 @@ export const IntelligenceViewer: React.FC = () => {
   const hasTranscript = segments.length > 0;
   const isConcluded = meeting.status === 'COMPLETED' || hasTranscript;
 
+  const renderAttendeesCard = (keyPrefix: string) => {
+    if (!meeting?.participants || meeting.participants.length === 0) return null;
+    const hasAnyEmail = meeting.participants.some((p) => p.email);
+
+    return (
+      <div className="p-5 rounded-lg bg-card border border-border space-y-3">
+        <div className="flex items-center justify-between pb-2 border-b border-border">
+          <h3 className="text-xs font-semibold uppercase tracking-wider text-muted-foreground flex items-center gap-1.5">
+            <RiGroupLine className="w-3.5 h-3.5 text-primary" />
+            <span>Invited Attendees & Email Addresses ({meeting.participants.length})</span>
+          </h3>
+          {hasAnyEmail && (
+            <Button
+              variant="outline"
+              size="sm"
+              onClick={handleCopyAllEmails}
+              className="h-7 text-xs px-2.5 gap-1.5 cursor-pointer shadow-2xs"
+              title="Copy all attendee emails as comma-separated list"
+            >
+              {copiedEmailKey === 'all-emails' ? (
+                <>
+                  <RiCheckLine className="w-3.5 h-3.5 text-emerald-500" />
+                  <span className="text-emerald-500 font-medium">All Emails Copied</span>
+                </>
+              ) : (
+                <>
+                  <RiFileCopyLine className="w-3.5 h-3.5" />
+                  <span>Copy All Emails</span>
+                </>
+              )}
+            </Button>
+          )}
+        </div>
+        <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 gap-3">
+          {meeting.participants.map((p, idx) => {
+            const cardKey = `${keyPrefix}-email-${p.id || idx}`;
+            const isCopied = copiedEmailKey === cardKey;
+            return (
+              <div
+                key={p.id || idx}
+                className="p-3 rounded-lg bg-muted/40 border border-border/70 flex items-start justify-between gap-2.5"
+              >
+                <div className="flex items-start gap-2.5 min-w-0 flex-1">
+                  <div className="w-7 h-7 rounded-full bg-primary/10 text-primary flex items-center justify-center font-bold text-xs shrink-0">
+                    {p.name ? p.name.charAt(0).toUpperCase() : 'U'}
+                  </div>
+                  <div className="min-w-0 flex-1 space-y-0.5">
+                    <p className="text-xs font-semibold text-foreground truncate">{p.name || 'Anonymous'}</p>
+                    {p.email ? (
+                      <a
+                        href={`mailto:${p.email}`}
+                        className="text-[11px] text-muted-foreground hover:text-primary transition flex items-center gap-1 truncate font-mono"
+                        title={`Email: ${p.email}`}
+                      >
+                        <RiMailLine className="w-3 h-3 shrink-0" />
+                        <span className="truncate">{p.email}</span>
+                      </a>
+                    ) : (
+                      <span className="text-[10px] text-muted-foreground italic">No email attached</span>
+                    )}
+                  </div>
+                </div>
+
+                {p.email && (
+                  <Button
+                    variant="ghost"
+                    size="sm"
+                    onClick={(e) => handleCopyEmail(p.email!, cardKey, e)}
+                    className="h-7 px-2 text-xs text-muted-foreground hover:text-foreground shrink-0 cursor-pointer"
+                    title={`Copy ${p.email}`}
+                  >
+                    {isCopied ? (
+                      <span className="text-emerald-500 flex items-center gap-1 text-[11px] font-medium">
+                        <RiCheckLine className="w-3 h-3" /> Copied
+                      </span>
+                    ) : (
+                      <span className="flex items-center gap-1 text-[11px]">
+                        <RiFileCopyLine className="w-3 h-3" /> Copy
+                      </span>
+                    )}
+                  </Button>
+                )}
+              </div>
+            );
+          })}
+        </div>
+      </div>
+    );
+  };
+
   return (
     <div className="space-y-6 max-w-6xl mx-auto">
       {/* Top Header & Toolbar */}
@@ -600,6 +774,76 @@ export const IntelligenceViewer: React.FC = () => {
                 </>
               )}
             </div>
+
+            {/* Attendees & Emails List */}
+            {meeting.participants && meeting.participants.length > 0 && (
+              <div className="flex items-center gap-2 pt-1 flex-wrap">
+                <div className="flex items-center gap-1.5 text-[11px] font-semibold text-muted-foreground">
+                  <RiGroupLine className="w-3.5 h-3.5 text-primary" />
+                  <span>Attendees ({meeting.participants.length}):</span>
+                </div>
+                {meeting.participants.some((p) => p.email) && (
+                  <button
+                    type="button"
+                    onClick={handleCopyAllEmails}
+                    className="inline-flex items-center gap-1 px-2 py-0.5 rounded text-[10px] font-medium bg-muted hover:bg-muted/80 text-muted-foreground hover:text-foreground border border-border/80 transition cursor-pointer shadow-2xs"
+                    title="Copy all attendee email addresses"
+                  >
+                    {copiedEmailKey === 'all-emails' ? (
+                      <>
+                        <RiCheckLine className="w-3 h-3 text-emerald-500" />
+                        <span className="text-emerald-500 font-semibold">All Copied</span>
+                      </>
+                    ) : (
+                      <>
+                        <RiFileCopyLine className="w-3 h-3" />
+                        <span>Copy All</span>
+                      </>
+                    )}
+                  </button>
+                )}
+                <div className="flex items-center gap-1.5 flex-wrap">
+                  {meeting.participants.map((p, idx) => {
+                    const pillKey = `header-email-${p.id || idx}`;
+                    const isCopied = copiedEmailKey === pillKey;
+                    return (
+                      <span
+                        key={p.id || idx}
+                        className="inline-flex items-center gap-1.5 px-2.5 py-0.5 rounded-lg bg-muted/70 border border-border/80 text-xs text-foreground font-medium shadow-2xs hover:bg-muted transition"
+                        title={p.email ? `Attendee: ${p.name} (${p.email})` : undefined}
+                      >
+                        <RiUser3Line className="w-3 h-3 text-muted-foreground shrink-0" />
+                        <span>{p.name}</span>
+                        {p.email && (
+                          <span className="inline-flex items-center gap-1 bg-primary/10 pl-1.5 pr-0.5 py-0.2 rounded border border-primary/20">
+                            <a
+                              href={`mailto:${p.email}`}
+                              className="text-[11px] text-primary hover:underline font-mono truncate max-w-[160px]"
+                              onClick={(e) => e.stopPropagation()}
+                              title={`Mail to ${p.email}`}
+                            >
+                              {p.email}
+                            </a>
+                            <button
+                              type="button"
+                              onClick={(e) => handleCopyEmail(p.email!, pillKey, e)}
+                              className="p-0.5 rounded hover:bg-primary/20 text-primary transition cursor-pointer"
+                              title={`Copy ${p.email}`}
+                            >
+                              {isCopied ? (
+                                <RiCheckLine className="w-2.5 h-2.5 text-emerald-600 dark:text-emerald-400" />
+                              ) : (
+                                <RiFileCopyLine className="w-2.5 h-2.5" />
+                              )}
+                            </button>
+                          </span>
+                        )}
+                      </span>
+                    );
+                  })}
+                </div>
+              </div>
+            )}
           </div>
 
           {/* Action Toolbar */}
@@ -714,19 +958,49 @@ export const IntelligenceViewer: React.FC = () => {
                     <RiMore2Fill className="h-4 w-4" />
                   </Button>
                 </DropdownMenuTrigger>
-                <DropdownMenuContent align="end" className="w-48 p-1">
-                  <DropdownMenuItem
-                    onClick={handleSyncGoogleTranscript}
-                    disabled={isSyncingGoogle || meeting.status === 'PROCESSING'}
-                    className="gap-2 py-2 cursor-pointer text-xs"
-                  >
-                    {isSyncingGoogle ? (
-                      <RiLoader4Line className="w-4 h-4 animate-spin text-muted-foreground" />
-                    ) : (
-                      <FcGoogle className="w-4 h-4" />
-                    )}
-                    <span>Sync Google Meet</span>
-                  </DropdownMenuItem>
+                <DropdownMenuContent align="end" className="w-52 p-1">
+                  {meeting.provider === 'MICROSOFT_TEAMS' ? (
+                    <DropdownMenuItem
+                      onClick={handleSyncMicrosoftTranscript}
+                      disabled={isSyncingMicrosoft || meeting.status === 'PROCESSING'}
+                      className="gap-2 py-2 cursor-pointer text-xs"
+                    >
+                      {isSyncingMicrosoft ? (
+                        <RiLoader4Line className="w-4 h-4 animate-spin text-muted-foreground" />
+                      ) : (
+                        <RiTeamLine className="w-4 h-4 text-purple-500" />
+                      )}
+                      <span>Sync Teams Transcript</span>
+                    </DropdownMenuItem>
+                  ) : (
+                    <DropdownMenuItem
+                      onClick={handleSyncGoogleTranscript}
+                      disabled={isSyncingGoogle || meeting.status === 'PROCESSING'}
+                      className="gap-2 py-2 cursor-pointer text-xs"
+                    >
+                      {isSyncingGoogle ? (
+                        <RiLoader4Line className="w-4 h-4 animate-spin text-muted-foreground" />
+                      ) : (
+                        <FcGoogle className="w-4 h-4" />
+                      )}
+                      <span>Sync Google Meet</span>
+                    </DropdownMenuItem>
+                  )}
+
+                  {meeting.provider !== 'MICROSOFT_TEAMS' && meeting.provider !== 'GOOGLE_MEET' && (
+                    <DropdownMenuItem
+                      onClick={handleSyncMicrosoftTranscript}
+                      disabled={isSyncingMicrosoft || meeting.status === 'PROCESSING'}
+                      className="gap-2 py-2 cursor-pointer text-xs"
+                    >
+                      {isSyncingMicrosoft ? (
+                        <RiLoader4Line className="w-4 h-4 animate-spin text-muted-foreground" />
+                      ) : (
+                        <RiTeamLine className="w-4 h-4 text-purple-500" />
+                      )}
+                      <span>Sync Teams Transcript</span>
+                    </DropdownMenuItem>
+                  )}
 
                   <DropdownMenuItem
                     onClick={() => setIsUploadOpen(true)}
@@ -812,23 +1086,39 @@ export const IntelligenceViewer: React.FC = () => {
             <div className="max-w-md mx-auto space-y-1">
               <h3 className="font-semibold text-sm text-foreground">No Transcript Ingested Yet</h3>
               <p className="text-xs text-muted-foreground leading-relaxed">
-                Sync with Google Meet or upload a transcript file (.txt, .json, .vtt) to generate intelligence.
+                Sync with {meeting.provider === 'MICROSOFT_TEAMS' ? 'Microsoft Teams' : 'Google Meet'} or upload a transcript file (.txt, .json, .vtt) to generate intelligence.
               </p>
             </div>
             <div className="flex flex-wrap items-center justify-center gap-3 pt-2">
-              <Button
-                size="sm"
-                onClick={handleSyncGoogleTranscript}
-                disabled={isSyncingGoogle}
-                className="h-8 text-xs"
-              >
-                {isSyncingGoogle ? (
-                  <RiLoader4Line className="w-3.5 h-3.5 animate-spin mr-1.5" />
-                ) : (
-                  <FcGoogle className="w-3.5 h-3.5 mr-1.5" />
-                )}
-                Pull from Google Meet
-              </Button>
+              {meeting.provider === 'MICROSOFT_TEAMS' ? (
+                <Button
+                  size="sm"
+                  onClick={handleSyncMicrosoftTranscript}
+                  disabled={isSyncingMicrosoft}
+                  className="h-8 text-xs bg-purple-600 hover:bg-purple-700 text-white"
+                >
+                  {isSyncingMicrosoft ? (
+                    <RiLoader4Line className="w-3.5 h-3.5 animate-spin mr-1.5" />
+                  ) : (
+                    <RiTeamLine className="w-3.5 h-3.5 mr-1.5" />
+                  )}
+                  Pull from Teams
+                </Button>
+              ) : (
+                <Button
+                  size="sm"
+                  onClick={handleSyncGoogleTranscript}
+                  disabled={isSyncingGoogle}
+                  className="h-8 text-xs"
+                >
+                  {isSyncingGoogle ? (
+                    <RiLoader4Line className="w-3.5 h-3.5 animate-spin mr-1.5" />
+                  ) : (
+                    <FcGoogle className="w-3.5 h-3.5 mr-1.5" />
+                  )}
+                  Pull from Google Meet
+                </Button>
+              )}
               <Button
                 size="sm"
                 variant="outline"
@@ -990,12 +1280,20 @@ export const IntelligenceViewer: React.FC = () => {
                   </div>
                 </div>
               </div>
+
+              {/* Attendees & Participants List Card */}
+              {renderAttendeesCard('overview')}
             </div>
           ) : (
-            <div className="p-12 text-center text-xs text-muted-foreground italic bg-card rounded-lg border border-border">
-              {meeting.status === 'PROCESSING'
-                ? 'Generating summary...'
-                : 'No summary available. Ingest a transcript to generate intelligence.'}
+            <div className="space-y-6">
+              {/* If no AI summary yet, still show Attendees */}
+              {renderAttendeesCard('overview-fallback')}
+
+              <div className="p-12 text-center text-xs text-muted-foreground italic bg-card rounded-lg border border-border">
+                {meeting.status === 'PROCESSING'
+                  ? 'Generating summary...'
+                  : 'No summary available. Ingest a transcript to generate intelligence.'}
+              </div>
             </div>
           )}
         </TabsContent>

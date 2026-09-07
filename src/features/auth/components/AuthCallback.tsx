@@ -10,8 +10,10 @@ export const AuthCallback: React.FC = () => {
   const [errorMessage, setErrorMessage] = useState<string | null>(null);
   const [isRetrying, setIsRetrying] = useState(false);
   const [isNetworkFailure, setIsNetworkFailure] = useState(false);
+  const hasProcessedRef = React.useRef(false);
 
   const processAuth = useCallback(async () => {
+    if (hasProcessedRef.current) return;
     setIsRetrying(true);
     setErrorMessage(null);
     setIsNetworkFailure(false);
@@ -24,13 +26,17 @@ export const AuthCallback: React.FC = () => {
       }
 
       if (session) {
+        hasProcessedRef.current = true;
+        const pendingProvider = sessionStorage.getItem('pending_oauth_provider') || session.user.app_metadata?.provider;
+        sessionStorage.removeItem('pending_oauth_provider');
+
         await syncSupabaseSession(
           session.access_token,
           session.user.email,
           session.user.user_metadata?.full_name || session.user.user_metadata?.name,
           session.provider_token || undefined,
           session.provider_refresh_token || undefined,
-          session.user.app_metadata?.provider || undefined,
+          pendingProvider || undefined,
         );
         navigate('/', { replace: true });
         return;
@@ -38,15 +44,19 @@ export const AuthCallback: React.FC = () => {
 
       // Listen for token if session not immediately resolved
       const { data: authListener } = supabase.auth.onAuthStateChange(async (event, currentSession) => {
-        if (currentSession && (event === 'SIGNED_IN' || event === 'INITIAL_SESSION')) {
+        if (!hasProcessedRef.current && currentSession && (event === 'SIGNED_IN' || event === 'INITIAL_SESSION')) {
+          hasProcessedRef.current = true;
           try {
+            const pendingProvider = sessionStorage.getItem('pending_oauth_provider') || currentSession.user.app_metadata?.provider;
+            sessionStorage.removeItem('pending_oauth_provider');
+
             await syncSupabaseSession(
               currentSession.access_token,
               currentSession.user.email,
               currentSession.user.user_metadata?.full_name || currentSession.user.user_metadata?.name,
               currentSession.provider_token || undefined,
               currentSession.provider_refresh_token || undefined,
-              currentSession.user.app_metadata?.provider || undefined,
+              pendingProvider || undefined,
             );
             navigate('/', { replace: true });
           } catch (err: any) {

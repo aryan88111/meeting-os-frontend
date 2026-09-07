@@ -6,10 +6,10 @@ import {
   RiLinkM,
   RiVideoChatLine,
   RiLoader4Line,
+  RiTeamLine,
 } from 'react-icons/ri';
 import { FcGoogle } from 'react-icons/fc';
 import { SiZoom } from 'react-icons/si';
-import { RiTeamLine } from 'react-icons/ri';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from '@/components/ui/card';
 import { Badge } from '@/components/ui/badge';
@@ -17,6 +17,8 @@ import {
   integrationsControllerListIntegrations,
   integrationsControllerSyncGoogleCalendar,
   integrationsControllerScanRecentTranscripts,
+  integrationsControllerSyncMicrosoftCalendar,
+  integrationsControllerScanRecentMicrosoftTranscripts,
 } from '@/api';
 import { useAuthStore } from '@/stores/auth.store';
 
@@ -64,6 +66,15 @@ export const IntegrationsView: React.FC = () => {
     }
   };
 
+  const handleConnectMicrosoft = async () => {
+    setErrorMessage(null);
+    try {
+      await loginWithOAuth('azure');
+    } catch (err: any) {
+      setErrorMessage(err?.message || 'Failed to initiate Microsoft Teams connection');
+    }
+  };
+
   const handleSyncGoogle = async () => {
     setIsSyncing(true);
     setSyncMessage(null);
@@ -104,7 +115,48 @@ export const IntegrationsView: React.FC = () => {
     }
   };
 
+  const handleSyncMicrosoft = async () => {
+    setIsSyncing(true);
+    setSyncMessage(null);
+    try {
+      const res = await integrationsControllerSyncMicrosoftCalendar();
+      if (res.data) {
+        const data = res.data as any;
+        setSyncMessage(`Successfully synced ${data.syncedCount || 0} meetings from Microsoft Calendar!`);
+        setTimeout(() => setSyncMessage(null), 4000);
+      } else if (res.error) {
+        const errData = res.error as any;
+        setSyncMessage(errData?.message || 'Sync failed');
+      }
+    } catch (err: any) {
+      setSyncMessage(err.message || 'Failed to sync Microsoft calendar');
+    } finally {
+      setIsSyncing(false);
+    }
+  };
+
+  const handleScanMicrosoftTranscripts = async () => {
+    setIsSyncing(true);
+    setSyncMessage(null);
+    try {
+      const res = await integrationsControllerScanRecentMicrosoftTranscripts();
+      if (res.data) {
+        const data = res.data as any;
+        setSyncMessage(data.message || `Scanned ${data.scannedCount || 0} Teams meetings.`);
+        setTimeout(() => setSyncMessage(null), 4000);
+      } else if (res.error) {
+        const errData = res.error as any;
+        setSyncMessage(errData?.message || 'Scan failed');
+      }
+    } catch (err: any) {
+      setSyncMessage(err.message || 'Failed to scan Microsoft Teams transcripts');
+    } finally {
+      setIsSyncing(false);
+    }
+  };
+
   const googleIntegration = integrations.find((i) => i.provider === 'GOOGLE_MEET');
+  const microsoftIntegration = integrations.find((i) => i.provider === 'MICROSOFT_TEAMS');
 
   return (
     <div className="space-y-6 animate-in fade-in duration-300">
@@ -118,11 +170,11 @@ export const IntegrationsView: React.FC = () => {
             Connect your video conferencing platforms and calendars to automatically import meeting sessions.
           </p>
         </div>
-        {googleIntegration && (
+        {(googleIntegration || microsoftIntegration) && (
           <Button
             variant="outline"
             size="sm"
-            onClick={handleSyncGoogle}
+            onClick={googleIntegration ? handleSyncGoogle : handleSyncMicrosoft}
             disabled={isSyncing}
             className="h-8 text-xs flex items-center gap-1.5"
           >
@@ -134,7 +186,7 @@ export const IntegrationsView: React.FC = () => {
 
       {errorMessage && (
         <div className="p-4 rounded-2xl bg-destructive/10 border border-destructive/20 text-destructive text-xs space-y-1">
-          <div className="font-bold">Google Calendar Connection Note:</div>
+          <div className="font-bold">Integration Connection Note:</div>
           <p className="leading-relaxed">{errorMessage}</p>
         </div>
       )}
@@ -242,6 +294,103 @@ export const IntegrationsView: React.FC = () => {
           </CardContent>
         </Card>
 
+        {/* Microsoft Teams */}
+        <Card className="border-border shadow-xs hover:border-primary/40 transition-colors flex flex-col justify-between">
+          <CardHeader className="pb-3">
+            <div className="flex items-center justify-between">
+              <div className="w-10 h-10 rounded-xl bg-purple-500/10 border border-purple-500/20 flex items-center justify-center">
+                <RiTeamLine className="w-6 h-6 text-purple-600 dark:text-purple-400" />
+              </div>
+              {microsoftIntegration ? (
+                microsoftIntegration.status === 'ACTIVE' ? (
+                  <Badge variant="outline" className="bg-emerald-500/10 text-emerald-500 border-emerald-500/20 text-[10px]">
+                    Connected
+                  </Badge>
+                ) : (
+                  <Badge variant="outline" className="bg-amber-500/10 text-amber-500 border-amber-500/20 text-[10px]">
+                    Re-auth Required
+                  </Badge>
+                )
+              ) : (
+                <Badge variant="secondary" className="text-[10px]">
+                  Available
+                </Badge>
+              )}
+            </div>
+            <CardTitle className="text-sm font-bold pt-2">Microsoft Teams</CardTitle>
+            <CardDescription className="text-xs">
+              Direct Teams video meeting links + Microsoft 365 Enterprise Calendar &amp; Transcript sync.
+            </CardDescription>
+          </CardHeader>
+          <CardContent className="pt-0">
+            {microsoftIntegration ? (
+              <div className="space-y-3">
+                <div className="text-[11px] text-muted-foreground truncate">
+                  Account: <span className="font-semibold text-foreground">{microsoftIntegration.account || 'Connected'}</span>
+                </div>
+                <div className="p-2 rounded-lg bg-muted/60 border border-border/80 text-[10px] text-muted-foreground leading-relaxed">
+                  ℹ️ Automated Graph API calendar sync is supported for <strong className="text-foreground">Microsoft 365 Work/Enterprise accounts</strong>. Personal accounts use MeetingOS direct Teams links.
+                </div>
+                {microsoftIntegration.status === 'AUTH_REQUIRED' && (
+                  <div className="p-2.5 rounded-xl bg-amber-500/10 border border-amber-500/20 text-[11px] text-amber-700 dark:text-amber-400 space-y-2">
+                    <p>OAuth session expired or revoked. Please re-authenticate to sync meetings.</p>
+                    <Button
+                      variant="default"
+                      size="sm"
+                      onClick={handleConnectMicrosoft}
+                      className="w-full h-7 text-xs font-semibold bg-amber-600 hover:bg-amber-700 text-white"
+                    >
+                      Reconnect Microsoft Account
+                    </Button>
+                  </div>
+                )}
+                <div className="flex flex-wrap items-center gap-2">
+                  <Button
+                    variant="default"
+                    size="sm"
+                    onClick={handleSyncMicrosoft}
+                    disabled={isSyncing || microsoftIntegration.status === 'AUTH_REQUIRED'}
+                    className="flex-1 h-8 text-xs"
+                  >
+                    {isSyncing ? <RiLoader4Line className="w-3.5 h-3.5 animate-spin mr-1" /> : <RiRefreshLine className="w-3.5 h-3.5 mr-1" />}
+                    Sync Events
+                  </Button>
+                  <Button
+                    variant="outline"
+                    size="sm"
+                    onClick={handleScanMicrosoftTranscripts}
+                    disabled={isSyncing || microsoftIntegration.status === 'AUTH_REQUIRED'}
+                    className="h-8 text-xs"
+                    title="Scan Microsoft Teams for ended meeting transcripts"
+                  >
+                    {isSyncing ? <RiLoader4Line className="w-3.5 h-3.5 animate-spin mr-1" /> : <RiVideoChatLine className="w-3.5 h-3.5 mr-1 text-purple-500" />}
+                    Scan Transcripts
+                  </Button>
+                  {microsoftIntegration.status === 'ACTIVE' && (
+                    <Button
+                      variant="ghost"
+                      size="sm"
+                      onClick={handleConnectMicrosoft}
+                      className="h-8 text-xs"
+                    >
+                      Reconnect
+                    </Button>
+                  )}
+                </div>
+              </div>
+            ) : (
+              <Button
+                variant="default"
+                size="sm"
+                onClick={handleConnectMicrosoft}
+                className="w-full h-8 text-xs shadow-xs"
+              >
+                <RiLinkM className="w-3.5 h-3.5 mr-1.5" /> Connect Microsoft Teams
+              </Button>
+            )}
+          </CardContent>
+        </Card>
+
         {/* Zoom */}
         <Card className="border-border shadow-xs opacity-80 flex flex-col justify-between">
           <CardHeader className="pb-3">
@@ -254,27 +403,6 @@ export const IntegrationsView: React.FC = () => {
             <CardTitle className="text-sm font-bold pt-2">Zoom Meetings</CardTitle>
             <CardDescription className="text-xs">
               Direct webhook ingest for cloud recordings and live Zoom meeting transcripts.
-            </CardDescription>
-          </CardHeader>
-          <CardContent className="pt-0">
-            <Button variant="outline" size="sm" disabled className="w-full h-8 text-xs">
-              Phase 2 Integration
-            </Button>
-          </CardContent>
-        </Card>
-
-        {/* Microsoft Teams */}
-        <Card className="border-border shadow-xs opacity-80 flex flex-col justify-between">
-          <CardHeader className="pb-3">
-            <div className="flex items-center justify-between">
-              <div className="w-10 h-10 rounded-xl bg-purple-500/10 border border-purple-500/20 flex items-center justify-center">
-                <RiTeamLine className="w-6 h-6 text-purple-500" />
-              </div>
-              <Badge variant="secondary" className="text-[10px]">Coming Soon</Badge>
-            </div>
-            <CardTitle className="text-sm font-bold pt-2">Microsoft Teams</CardTitle>
-            <CardDescription className="text-xs">
-              Synchronize Microsoft 365 Calendar and automated Graph API meeting transcripts.
             </CardDescription>
           </CardHeader>
           <CardContent className="pt-0">

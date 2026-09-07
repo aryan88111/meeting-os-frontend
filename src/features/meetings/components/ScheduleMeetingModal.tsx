@@ -10,6 +10,7 @@ import {
   RiSparklingFill,
   RiLoader4Line,
   RiTeamLine,
+  RiInformationLine,
 } from 'react-icons/ri';
 import { FcGoogle } from 'react-icons/fc';
 import { SiZoom } from 'react-icons/si';
@@ -53,8 +54,10 @@ export const ScheduleMeetingModal: React.FC<ScheduleMeetingModalProps> = ({
   const [error, setError] = useState<string | null>(null);
   const [googleAccount, setGoogleAccount] = useState<string | null>(null);
   const [googleStatus, setGoogleStatus] = useState<'ACTIVE' | 'AUTH_REQUIRED' | 'DISCONNECTED' | 'LOADING'>('LOADING');
+  const [microsoftAccount, setMicrosoftAccount] = useState<string | null>(null);
+  const [microsoftStatus, setMicrosoftStatus] = useState<'ACTIVE' | 'AUTH_REQUIRED' | 'DISCONNECTED' | 'LOADING'>('LOADING');
 
-  // Check if Google is connected
+  // Check if integrations are connected
   React.useEffect(() => {
     if (isOpen) {
       integrationsControllerListIntegrations()
@@ -68,10 +71,19 @@ export const ScheduleMeetingModal: React.FC<ScheduleMeetingModalProps> = ({
             } else {
               setGoogleStatus('DISCONNECTED');
             }
+
+            const m = (data.integrations || []).find((i: any) => i.provider === 'MICROSOFT_TEAMS');
+            if (m) {
+              setMicrosoftAccount(m.account || 'Connected');
+              setMicrosoftStatus(m.status === 'ACTIVE' ? 'ACTIVE' : 'AUTH_REQUIRED');
+            } else {
+              setMicrosoftStatus('DISCONNECTED');
+            }
           }
         })
         .catch(() => {
           setGoogleStatus('DISCONNECTED');
+          setMicrosoftStatus('DISCONNECTED');
         });
     }
   }, [isOpen]);
@@ -82,6 +94,15 @@ export const ScheduleMeetingModal: React.FC<ScheduleMeetingModalProps> = ({
       await loginWithOAuth('google');
     } catch (err: any) {
       setError(err?.message || 'Failed to initiate Google Calendar connection');
+    }
+  };
+
+  const handleConnectMicrosoft = async () => {
+    setError(null);
+    try {
+      await loginWithOAuth('azure');
+    } catch (err: any) {
+      setError(err?.message || 'Failed to initiate Microsoft Teams connection');
     }
   };
 
@@ -291,7 +312,11 @@ export const ScheduleMeetingModal: React.FC<ScheduleMeetingModalProps> = ({
                       : '⚡ Connect your Google Calendar below to create official Google Meet rooms and dispatch Calendar invitations.'
                   )}
                   {provider === 'ZOOM' && '⚡ MeetingOS will automatically provision a Zoom meeting ID with security passcode.'}
-                  {provider === 'MICROSOFT_TEAMS' && '⚡ MeetingOS will generate an official Microsoft Teams join link.'}
+                  {provider === 'MICROSOFT_TEAMS' && (
+                    microsoftStatus === 'ACTIVE'
+                      ? `✓ Publishing to your Microsoft Outlook & Teams (${microsoftAccount}).`
+                      : '⚡ Connect your Microsoft Teams below to create official Teams meeting rooms.'
+                  )}
                   {provider === 'MANUAL' && '⚡ MeetingOS will generate a persistent shared room so all attendees join the same call.'}
                 </p>
 
@@ -328,6 +353,57 @@ export const ScheduleMeetingModal: React.FC<ScheduleMeetingModalProps> = ({
                     >
                       Connect Google
                     </button>
+                  </div>
+                )}
+
+                {provider === 'MICROSOFT_TEAMS' && microsoftStatus === 'ACTIVE' && (
+                  <span className="inline-block px-2 py-0.5 rounded-md bg-purple-500/10 text-purple-600 dark:text-purple-400 text-[10px] font-semibold">
+                    ✓ Microsoft Teams Connected & Active
+                  </span>
+                )}
+
+                {provider === 'MICROSOFT_TEAMS' && microsoftStatus === 'AUTH_REQUIRED' && (
+                  <div className="p-2 rounded-lg bg-amber-500/10 border border-amber-500/20 text-xs flex items-center justify-between gap-2">
+                    <span className="text-amber-700 dark:text-amber-400 text-[11px]">
+                      Microsoft session expired. Reconnect to refresh Teams credentials.
+                    </span>
+                    <button
+                      type="button"
+                      onClick={handleConnectMicrosoft}
+                      className="px-2.5 py-1 rounded-md bg-purple-600 text-white text-[10px] font-semibold hover:opacity-90 transition whitespace-nowrap cursor-pointer"
+                    >
+                      Reconnect Teams
+                    </button>
+                  </div>
+                )}
+
+                {provider === 'MICROSOFT_TEAMS' && microsoftStatus === 'DISCONNECTED' && (
+                  <div className="p-2 rounded-lg bg-muted border border-border text-xs flex items-center justify-between gap-2">
+                    <span className="text-muted-foreground text-[11px]">
+                      Microsoft Teams account not connected.
+                    </span>
+                    <button
+                      type="button"
+                      onClick={handleConnectMicrosoft}
+                      className="px-2.5 py-1 rounded-md bg-purple-600 text-white text-[10px] font-semibold hover:opacity-90 transition whitespace-nowrap cursor-pointer"
+                    >
+                      Connect Teams
+                    </button>
+                  </div>
+                )}
+
+                {provider === 'MICROSOFT_TEAMS' && (
+                  <div className="mt-2.5 p-3 rounded-xl bg-purple-500/5 border border-purple-500/20 text-xs space-y-1.5">
+                    <div className="flex items-center gap-1.5 font-semibold text-purple-700 dark:text-purple-300">
+                      <RiInformationLine className="w-4 h-4 text-purple-600 shrink-0" />
+                      <span>Microsoft Teams Account & Calendar Notice</span>
+                    </div>
+                    <p className="text-[11px] text-muted-foreground leading-relaxed">
+                      • <strong className="text-foreground">Video Conferencing</strong>: MeetingOS automatically provisions a direct Microsoft Teams video link for your meeting.
+                    </p>
+                    <p className="text-[11px] text-muted-foreground leading-relaxed">
+                      • <strong className="text-foreground">Calendar Scheduling</strong>: Automated Outlook Calendar sync via Microsoft Graph API is supported for <strong className="text-foreground">Microsoft 365 Work / Enterprise company accounts</strong>. For personal accounts (e.g. @gmail.com or personal Microsoft accounts), you can use the generated Teams video link and 1-click copy attendee emails to share the invite.
+                    </p>
                   </div>
                 )}
               </div>

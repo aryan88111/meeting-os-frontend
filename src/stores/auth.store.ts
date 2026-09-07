@@ -149,10 +149,13 @@ export const useAuthStore = create<AuthState>((set, get) => ({
   loginWithOAuth: async (provider: 'google' | 'github' | 'azure') => {
     set({ isLoading: true, error: null });
     try {
+      sessionStorage.setItem('pending_oauth_provider', provider);
       const redirectUrl = `${window.location.origin}/oauth/callback`;
       const scopes =
         provider === 'google'
           ? 'https://www.googleapis.com/auth/calendar.events https://www.googleapis.com/auth/calendar https://www.googleapis.com/auth/drive.readonly https://www.googleapis.com/auth/userinfo.email https://www.googleapis.com/auth/userinfo.profile'
+          : provider === 'azure'
+          ? 'https://graph.microsoft.com/.default offline_access openid email profile'
           : undefined;
 
       const { error } = await supabase.auth.signInWithOAuth({
@@ -164,6 +167,10 @@ export const useAuthStore = create<AuthState>((set, get) => ({
             provider === 'google'
               ? {
                   access_type: 'offline',
+                  prompt: 'consent',
+                }
+              : provider === 'azure'
+              ? {
                   prompt: 'consent',
                 }
               : undefined,

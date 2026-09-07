@@ -58,12 +58,53 @@ export const CalendarView: React.FC = () => {
   const [isScheduleOpen, setIsScheduleOpen] = useState(false);
   const [meetingToDelete, setMeetingToDelete] = useState<MeetingEvent | null>(null);
   const [copiedId, setCopiedId] = useState<string | null>(null);
+  const [copiedEmailMeetingId, setCopiedEmailMeetingId] = useState<string | null>(null);
+
+  const copyToClipboard = async (text: string) => {
+    if (navigator.clipboard && window.isSecureContext) {
+      try {
+        await navigator.clipboard.writeText(text);
+        return true;
+      } catch (err) {
+        console.warn('Clipboard API error:', err);
+      }
+    }
+    const textArea = document.createElement('textarea');
+    textArea.value = text;
+    textArea.style.position = 'fixed';
+    textArea.style.opacity = '0';
+    document.body.appendChild(textArea);
+    textArea.focus();
+    textArea.select();
+    try {
+      document.execCommand('copy');
+      document.body.removeChild(textArea);
+      return true;
+    } catch (e) {
+      document.body.removeChild(textArea);
+      return false;
+    }
+  };
 
   const handleCopyUrl = (id: string, url?: string) => {
     if (!url) return;
-    navigator.clipboard.writeText(url);
+    copyToClipboard(url);
     setCopiedId(id);
     setTimeout(() => setCopiedId(null), 2000);
+  };
+
+  const handleCopyAttendeeEmails = (m: MeetingEvent, e?: React.MouseEvent) => {
+    if (e) {
+      e.preventDefault();
+      e.stopPropagation();
+    }
+    const emails = (m.participants || [])
+      .filter((p) => p.email && p.email.trim())
+      .map((p) => p.email!.trim());
+    if (emails.length === 0) return;
+    copyToClipboard(emails.join(', '));
+    setCopiedEmailMeetingId(m.id);
+    setTimeout(() => setCopiedEmailMeetingId(null), 2000);
   };
 
   const fetchMeetings = useCallback(async () => {
@@ -415,11 +456,33 @@ export const CalendarView: React.FC = () => {
                           : 'TBD'}
                       </span>
 
-                      {m.participants.length > 0 && (
-                        <span className="flex items-center gap-1">
-                          <RiUser3Line className="w-3 h-3" />
-                          {m.participants.length} attendee(s)
-                        </span>
+                      {m.participants && m.participants.length > 0 && (
+                        <div className="flex items-center gap-1">
+                          <span
+                            className="flex items-center gap-1 cursor-default"
+                            title={m.participants.map((p) => (p.email ? `${p.name} (${p.email})` : p.name)).join(', ')}
+                          >
+                            <RiUser3Line className="w-3 h-3" />
+                            {m.participants.length} attendee(s)
+                          </span>
+                          {m.participants.some((p) => p.email) && (
+                            <Button
+                              variant="ghost"
+                              size="sm"
+                              onClick={(e) => handleCopyAttendeeEmails(m, e)}
+                              className="h-5 px-1 text-[9px] text-muted-foreground hover:text-foreground cursor-pointer"
+                              title="Copy attendee email(s)"
+                            >
+                              {copiedEmailMeetingId === m.id ? (
+                                <span className="text-emerald-500 font-medium flex items-center gap-0.5">
+                                  <RiCheckLine className="w-3 h-3" /> Copied
+                                </span>
+                              ) : (
+                                <RiFileCopyLine className="w-3 h-3" />
+                              )}
+                            </Button>
+                          )}
+                        </div>
                       )}
                     </div>
 
