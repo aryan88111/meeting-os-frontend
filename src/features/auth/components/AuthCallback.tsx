@@ -19,6 +19,20 @@ export const AuthCallback: React.FC = () => {
     setIsNetworkFailure(false);
 
     try {
+      // Surface explicit OAuth provider errors returned via query/hash immediately
+      const hashParams = new URLSearchParams(
+        window.location.hash.startsWith('#') ? window.location.hash.slice(1) : window.location.hash,
+      );
+      const searchParams = new URLSearchParams(window.location.search);
+      const oauthErrorDesc =
+        hashParams.get('error_description') ||
+        searchParams.get('error_description') ||
+        hashParams.get('error') ||
+        searchParams.get('error');
+      if (oauthErrorDesc) {
+        throw new Error(oauthErrorDesc);
+      }
+
       const { data: { session }, error } = await supabase.auth.getSession();
 
       if (error) {
