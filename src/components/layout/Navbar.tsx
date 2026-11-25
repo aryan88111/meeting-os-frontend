@@ -10,20 +10,24 @@ import {
   RiLoader4Line,
   RiVideoChatLine,
   RiArrowRightUpLine,
-  RiCloseLine
+  RiCloseLine,
+  RiMenuLine,
+  RiSideBarLine
 } from 'react-icons/ri';
 import { ThemeToggle } from '@/components/ui/theme-toggle';
 import { Avatar, AvatarFallback } from '@/components/ui/avatar';
 import { useAuthStore } from '@/stores/auth.store';
+import { useSidebarStore } from '@/stores/sidebar.store';
 import { useNavigate, Link } from 'react-router-dom';
 import { searchControllerSearchMeetings } from '@/api';
 
 export const Navbar: React.FC = () => {
   const navigate = useNavigate();
   const { user, currentOrganization, logout } = useAuthStore();
+  const { isCollapsed, toggleCollapse, toggleMobileOpen } = useSidebarStore();
   const [dropdownOpen, setDropdownOpen] = useState(false);
   
-  // Quick Search & Cmd+K
+  // Quick Search & Cmd+K & Cmd+B
   const [isSearchOpen, setIsSearchOpen] = useState(false);
   const [searchQuery, setSearchQuery] = useState('');
   const [searchResults, setSearchResults] = useState<any[]>([]);
@@ -36,13 +40,17 @@ export const Navbar: React.FC = () => {
         e.preventDefault();
         setIsSearchOpen(true);
       }
+      if ((e.metaKey || e.ctrlKey) && e.key === 'b') {
+        e.preventDefault();
+        toggleCollapse();
+      }
       if (e.key === 'Escape') {
         setIsSearchOpen(false);
       }
     };
     window.addEventListener('keydown', handleKeyDown);
     return () => window.removeEventListener('keydown', handleKeyDown);
-  }, []);
+  }, [toggleCollapse]);
 
   useEffect(() => {
     if (isSearchOpen) {
@@ -93,9 +101,31 @@ export const Navbar: React.FC = () => {
   };
 
   return (
-    <header className="h-14 border-b border-border bg-background/80 backdrop-blur-md sticky top-0 z-40 px-6 flex items-center justify-between transition-colors">
-      {/* Search trigger with keyboard shortcut */}
+    <header className="h-14 border-b border-border bg-background/80 backdrop-blur-md sticky top-0 z-40 px-4 sm:px-6 flex items-center justify-between gap-3 transition-colors">
+      {/* Left Area: Drawer Toggle (Mobile & Collapsed Desktop) + Search Trigger */}
       <div className="flex items-center gap-3 flex-1 max-w-md">
+        {/* Mobile Hamburger Drawer Toggle */}
+        <button
+          type="button"
+          onClick={toggleMobileOpen}
+          className="md:hidden h-8 w-8 rounded-lg border border-border hover:bg-muted flex items-center justify-center text-muted-foreground hover:text-foreground transition-colors cursor-pointer shrink-0"
+          title="Open drawer menu"
+        >
+          <RiMenuLine className="h-4 w-4" />
+        </button>
+
+        {/* Desktop Collapsed Sidebar Expand Trigger */}
+        {isCollapsed && (
+          <button
+            type="button"
+            onClick={toggleCollapse}
+            className="hidden md:flex h-8 w-8 rounded-lg border border-border hover:bg-muted items-center justify-center text-muted-foreground hover:text-foreground transition-colors cursor-pointer shrink-0"
+            title="Expand sidebar (Ctrl/Cmd + B)"
+          >
+            <RiSideBarLine className="h-4 w-4" />
+          </button>
+        )}
+
         <button
           type="button"
           onClick={() => setIsSearchOpen(true)}

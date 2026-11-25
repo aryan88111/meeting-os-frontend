@@ -66,6 +66,11 @@ const config: Config = {
         md: 'calc(var(--radius) - 2px)',
         sm: 'calc(var(--radius) - 4px)',
       },
+      fontFamily: {
+        sans: ['Inter', 'ui-sans-serif', 'system-ui', 'sans-serif'],
+        serif: ['Fraunces', 'ui-serif', 'Georgia', 'serif'],
+        mono: ['"JetBrains Mono"', 'ui-monospace', 'monospace'],
+      },
       keyframes: {
         'accordion-down': {
           from: { height: '0' },
@@ -75,10 +80,28 @@ const config: Config = {
           from: { height: 'var(--radix-accordion-content-height)' },
           to: { height: '0' },
         },
+        float: {
+          '0%, 100%': { transform: 'translateY(0px) rotate(var(--float-rotate, 0deg))' },
+          '50%': { transform: 'translateY(-12px) rotate(var(--float-rotate, 0deg))' },
+        },
+        'gradient-x': {
+          '0%, 100%': { backgroundPosition: '0% 50%' },
+          '50%': { backgroundPosition: '100% 50%' },
+        },
+        'spin-slow': {
+          from: { transform: 'rotate(0deg)' },
+          to: { transform: 'rotate(360deg)' },
+        },
       },
       animation: {
         'accordion-down': 'accordion-down 0.2s ease-out',
         'accordion-up': 'accordion-up 0.2s ease-out',
+        float: 'float 6s ease-in-out infinite',
+        'gradient-x': 'gradient-x 6s ease infinite',
+        'spin-slow': 'spin-slow 30s linear infinite',
+      },
+      backgroundSize: {
+        '200%': '200% 200%',
       },
     },
   },

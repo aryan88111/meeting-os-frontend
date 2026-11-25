@@ -18,13 +18,16 @@ export const AuthLayout: React.FC<AuthLayoutProps> = ({ children, title, subtitl
 
         {/* Logo */}
         <div className="flex items-center gap-3 z-10">
-          <div className="w-10 h-10 rounded-xl bg-gradient-to-tr from-primary to-purple-600 flex items-center justify-center text-primary-foreground font-bold shadow-lg shadow-primary/25">
-            <FiCpu className="w-5 h-5" />
-          </div>
+          <img
+            src="/logo.png"
+            alt="MeetingOS Logo"
+            className="w-10 h-10 rounded-xl object-contain shadow-lg shadow-primary/25"
+          />
           <span className="font-extrabold text-xl tracking-tight bg-gradient-to-r from-foreground to-foreground/70 bg-clip-text text-transparent">
             MeetingOS
           </span>
         </div>
+
 
         {/* Core Value Props */}
         <div className="space-y-8 z-10 max-w-md">
