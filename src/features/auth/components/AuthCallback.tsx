@@ -38,7 +38,9 @@ export const AuthCallback: React.FC = () => {
           session.provider_refresh_token || undefined,
           pendingProvider || undefined,
         );
-        navigate('/', { replace: true });
+        const redirectDestination = sessionStorage.getItem('meetingos_redirect_after_auth') || '/dashboard';
+        sessionStorage.removeItem('meetingos_redirect_after_auth');
+        navigate(redirectDestination, { replace: true });
         return;
       }
 
@@ -58,7 +60,9 @@ export const AuthCallback: React.FC = () => {
               currentSession.provider_refresh_token || undefined,
               pendingProvider || undefined,
             );
-            navigate('/', { replace: true });
+            const redirectDestination = sessionStorage.getItem('meetingos_redirect_after_auth') || '/dashboard';
+            sessionStorage.removeItem('meetingos_redirect_after_auth');
+            navigate(redirectDestination, { replace: true });
           } catch (err: any) {
             const raw = err?.message || String(err);
             const isNet =

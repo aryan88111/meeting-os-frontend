@@ -1,6 +1,7 @@
 import React from 'react';
 import { createBrowserRouter, Navigate } from 'react-router-dom';
 import { AppLayout } from '@/components/layout/AppLayout';
+import { LandingPageView } from '@/features/landing/components/LandingPageView';
 import { DashboardView } from '@/features/dashboard/components/DashboardView';
 import { MeetingListView } from '@/features/meetings/components/MeetingListView';
 import { IntelligenceViewer } from '@/features/intelligence/components/IntelligenceViewer';
@@ -16,8 +17,30 @@ import { AuthCallback } from '@/features/auth/components/AuthCallback';
 import { AuthGuard } from '@/features/auth/components/AuthGuard';
 import { IntegrationsView } from '@/features/integrations/components/IntegrationsView';
 import { GoogleCallbackView } from '@/features/integrations/components/GoogleCallbackView';
+import { VideoCallRoom } from '@/features/video-call';
 
 export const router = createBrowserRouter([
+  // Fullscreen WebRTC SFU Video Call Room
+  {
+    path: '/meetings/:id/call',
+    element: (
+      <AuthGuard>
+        <VideoCallRoom />
+      </AuthGuard>
+    ),
+  },
+  {
+    path: '/room/:id',
+    element: <VideoCallRoom />,
+  },
+
+  // Public Landing Page
+
+  {
+    path: '/',
+    element: <LandingPageView />,
+  },
+  // Public Auth Pages
   {
     path: '/login',
     element: <LoginForm />,
@@ -42,6 +65,54 @@ export const router = createBrowserRouter([
       </AuthGuard>
     ),
   },
+  // Authenticated Workspace Routes (under /app, /dashboard, and direct shortcuts)
+  {
+    path: '/app',
+    element: (
+      <AuthGuard>
+        <AppLayout />
+      </AuthGuard>
+    ),
+    children: [
+      {
+        index: true,
+        element: <DashboardView />,
+      },
+      {
+        path: 'meetings',
+        element: <MeetingListView />,
+      },
+      {
+        path: 'meetings/:id',
+        element: <IntelligenceViewer />,
+      },
+      {
+        path: 'calendar',
+        element: <CalendarView />,
+      },
+      {
+        path: 'action-items',
+        element: <ActionItemsView />,
+      },
+      {
+        path: 'integrations',
+        element: <IntegrationsView />,
+      },
+      {
+        path: 'knowledge',
+        element: <KnowledgeBaseView />,
+      },
+      {
+        path: 'documents',
+        element: <DocumentsView />,
+      },
+      {
+        path: 'settings',
+        element: <SettingsView />,
+      },
+    ],
+  },
+  // Direct Top-Level Workspace Routes
   {
     path: '/',
     element: (
@@ -51,7 +122,7 @@ export const router = createBrowserRouter([
     ),
     children: [
       {
-        index: true,
+        path: 'dashboard',
         element: <DashboardView />,
       },
       {

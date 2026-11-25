@@ -340,7 +340,15 @@ export const MeetingListView: React.FC = () => {
                       </div>
                     )}
 
-                    {meeting.meetingUrl && (
+                    {meeting.provider === 'MEETINGOS_ROOM' || !meeting.meetingUrl ? (
+                      <Link
+                        to={`/meetings/${meeting.id}/call`}
+                        className="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-lg bg-primary/10 hover:bg-primary/20 text-primary font-medium text-xs transition"
+                      >
+                        <RiVideoChatLine className="w-3.5 h-3.5" />
+                        <span>Launch Call</span>
+                      </Link>
+                    ) : (
                       <div className="flex items-center gap-1.5">
                         <a
                           href={meeting.meetingUrl}
@@ -367,6 +375,7 @@ export const MeetingListView: React.FC = () => {
                     )}
                   </div>
                 </div>
+
 
                 {/* Right badges & actions */}
                 <div className="flex items-center gap-4 sm:pr-2">

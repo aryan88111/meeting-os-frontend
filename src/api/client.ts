@@ -2,19 +2,15 @@ import { client } from './generated/client.gen';
 
 /**
  * Resolve API base URL.
- * - In production: uses VITE_API_URL or defaults to backend server.
- * - In development: uses VITE_API_URL if explicitly set, otherwise defaults to ''
- *   so requests route seamlessly through Vite's dev server proxy to http://localhost:8000,
- *   avoiding CORS and port mismatch issues.
+ * - Uses VITE_API_URL if explicitly configured (normalized without trailing slash).
+ * - Otherwise returns '' so both Vite dev proxy and Nginx production reverse proxy
+ *   route `/api/...` cleanly via same-origin without CORS issues.
  */
 const resolveBaseUrl = (): string => {
   if (import.meta.env.VITE_API_URL) {
-    return import.meta.env.VITE_API_URL;
+    return import.meta.env.VITE_API_URL.replace(/\/+$/, '');
   }
-  if (import.meta.env.DEV) {
-    return '';
-  }
-  return 'http://localhost:8000';
+  return '';
 };
 
 /**

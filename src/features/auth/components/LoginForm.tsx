@@ -29,7 +29,7 @@ export const LoginForm: React.FC = () => {
 
     try {
       await login(email, password);
-      navigate('/');
+      navigate('/dashboard');
     } catch {
       // Error handled in store
     }

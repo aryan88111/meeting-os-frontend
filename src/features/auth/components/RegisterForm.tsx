@@ -31,7 +31,7 @@ export const RegisterForm: React.FC = () => {
 
     try {
       await register(name, email, password, organizationName || undefined);
-      navigate('/');
+      navigate('/dashboard');
     } catch {
       // Error handled in store
     }

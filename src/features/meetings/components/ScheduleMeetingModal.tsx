@@ -41,7 +41,8 @@ export const ScheduleMeetingModal: React.FC<ScheduleMeetingModalProps> = ({
   const { loginWithOAuth } = useAuthStore();
   const [title, setTitle] = useState('');
   const [description, setDescription] = useState('');
-  const [provider, setProvider] = useState<'GOOGLE_MEET' | 'ZOOM' | 'MICROSOFT_TEAMS' | 'MANUAL'>('GOOGLE_MEET');
+  const [provider, setProvider] = useState<'MEETINGOS_ROOM' | 'GOOGLE_MEET' | 'ZOOM' | 'MICROSOFT_TEAMS' | 'MANUAL'>('MEETINGOS_ROOM');
+
   const [autoGenerateLink, setAutoGenerateLink] = useState(true);
   const [meetingUrl, setMeetingUrl] = useState('');
   const [date, setDate] = useState(initialDate || new Date().toISOString().split('T')[0]);
@@ -236,7 +237,19 @@ export const ScheduleMeetingModal: React.FC<ScheduleMeetingModalProps> = ({
           {/* Platform / Provider Selector */}
           <div className="space-y-1.5">
             <label className="font-semibold text-foreground/90">Meeting Platform</label>
-            <div className="grid grid-cols-4 gap-2">
+            <div className="grid grid-cols-5 gap-1.5">
+              <button
+                type="button"
+                onClick={() => setProvider('MEETINGOS_ROOM')}
+                className={`flex items-center justify-center gap-1.5 p-2 rounded-xl border text-xs font-medium transition ${
+                  provider === 'MEETINGOS_ROOM'
+                    ? 'border-primary bg-primary/15 text-primary font-bold shadow-xs'
+                    : 'border-border bg-background text-muted-foreground hover:bg-muted/50'
+                }`}
+              >
+                <RiSparklingFill className="w-3.5 h-3.5 text-primary" />
+                <span>MeetingOS</span>
+              </button>
               <button
                 type="button"
                 onClick={() => setProvider('GOOGLE_MEET')}
@@ -288,6 +301,7 @@ export const ScheduleMeetingModal: React.FC<ScheduleMeetingModalProps> = ({
             </div>
           </div>
 
+
           {/* Auto Generate Link Option & Manual Override */}
           <div className="space-y-2 p-3 rounded-xl bg-muted/40 border border-border/80">
             <div className="flex items-center justify-between">
@@ -306,6 +320,7 @@ export const ScheduleMeetingModal: React.FC<ScheduleMeetingModalProps> = ({
             {autoGenerateLink ? (
               <div className="space-y-1.5">
                 <p className="text-[11px] text-muted-foreground leading-relaxed">
+                  {provider === 'MEETINGOS_ROOM' && '✨ Native WebRTC SFU room with per-track live transcription, instant AI speaker diarization, and zero third-party bots.'}
                   {provider === 'GOOGLE_MEET' && (
                     googleStatus === 'ACTIVE'
                       ? `✓ Publishing to your Google Calendar (${googleAccount}) with genuine Google Meet room & attendee invitations.`
@@ -319,6 +334,7 @@ export const ScheduleMeetingModal: React.FC<ScheduleMeetingModalProps> = ({
                   )}
                   {provider === 'MANUAL' && '⚡ MeetingOS will generate a persistent shared room so all attendees join the same call.'}
                 </p>
+
 
                 {provider === 'GOOGLE_MEET' && googleStatus === 'ACTIVE' && (
                   <span className="inline-block px-2 py-0.5 rounded-md bg-emerald-500/10 text-emerald-600 dark:text-emerald-400 text-[10px] font-semibold">

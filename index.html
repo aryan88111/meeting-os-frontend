@@ -1,12 +1,73 @@
 <!doctype html>
-<html lang="en" class="dark">
+<html lang="en" class="dark scroll-smooth">
   <head>
     <meta charset="UTF-8" />
-    <link rel="icon" type="image/svg+xml" href="/vite.svg" />
+    <link rel="icon" type="image/png" href="/logo.png" />
+    <link rel="apple-touch-icon" href="/logo.png" />
     <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-    <title>MeetingOS — AI Meeting Intelligence & Knowledge Base</title>
+
+    
+    <!-- Primary SEO Metadata -->
+    <title>MeetingOS — Enterprise AI Meeting Intelligence & Knowledge Base</title>
+    <meta name="title" content="MeetingOS — Enterprise AI Meeting Intelligence & Knowledge Base" />
+    <meta name="description" content="Turn every meeting into actionable enterprise knowledge. MeetingOS delivers real-time speaker diarization, automated executive summaries, action item tracking, and pgvector RAG semantic search across Google Meet & Microsoft Teams." />
+    <meta name="keywords" content="meeting intelligence, AI summaries, speaker diarization, RAG knowledge base, Google Meet AI, Microsoft Teams AI, action item tracker, enterprise meeting notes, pgvector meeting search" />
+    <meta name="author" content="MeetingOS Team" />
+    <meta name="robots" content="index, follow" />
+    <link rel="canonical" href="https://meetingos.ai" />
+    
+    <!-- Open Graph / Facebook -->
+    <meta property="og:type" content="website" />
+    <meta property="og:url" content="https://meetingos.ai/" />
+    <meta property="og:title" content="MeetingOS — Enterprise AI Meeting Intelligence & Knowledge Base" />
+    <meta property="og:description" content="Turn every meeting into actionable enterprise knowledge. Live diarization, automated executive summaries, 1-click action item dispatch, and AI search across all company meetings." />
+    <meta property="og:image" content="https://meetingos.ai/og-preview.png" />
+    <meta property="og:site_name" content="MeetingOS" />
+
+    <!-- Twitter / X -->
+    <meta property="twitter:card" content="summary_large_image" />
+    <meta property="twitter:url" content="https://meetingos.ai/" />
+    <meta property="twitter:title" content="MeetingOS — Enterprise AI Meeting Intelligence & Knowledge Base" />
+    <meta property="twitter:description" content="Turn every meeting into actionable enterprise knowledge with autonomous AI summarization, speaker diarization, and semantic vector RAG." />
+    <meta property="twitter:image" content="https://meetingos.ai/og-preview.png" />
+
+    <!-- Google Font Inter -->
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700;800;900&family=JetBrains+Mono:wght@400;500;600&family=Fraunces:ital,wght@0,400;0,500;0,600;1,400;1,500&display=swap" rel="stylesheet">
+
+    <!-- Schema.org JSON-LD Structured Data for Google Rich Results -->
+    <script type="application/ld+json">
+    {
+      "@context": "https://schema.org",
+      "@graph": [
+        {
+          "@type": "SoftwareApplication",
+          "name": "MeetingOS",
+          "operatingSystem": "All",
+          "applicationCategory": "BusinessApplication",
+          "description": "Enterprise AI meeting intelligence platform with automated scheduling, speaker diarization, decision tracking, and vector RAG search.",
+          "offers": {
+            "@type": "Offer",
+            "price": "0.00",
+            "priceCurrency": "USD"
+          }
+        },
+        {
+          "@type": "Organization",
+          "name": "MeetingOS",
+          "url": "https://meetingos.ai",
+          "logo": "https://meetingos.ai/logo.png",
+          "sameAs": [
+            "https://twitter.com/meetingos",
+            "https://github.com/aryangautam88111"
+          ]
+        }
+      ]
+    }
+    </script>
   </head>
-  <body class="bg-slate-950 text-slate-100 min-h-screen antialiased">
+  <body class="bg-background text-foreground min-h-screen antialiased selection:bg-primary selection:text-primary-foreground">
     <div id="root"></div>
     <script type="module" src="/src/main.tsx"></script>
   </body>

@@ -29,7 +29,7 @@ export const Sidebar: React.FC = () => {
   ) ?? 0;
 
   const mainNav = [
-    { label: 'Dashboard', icon: RiDashboard3Line, href: '/' },
+    { label: 'Dashboard', icon: RiDashboard3Line, href: '/dashboard' },
     { 
       label: 'Meetings', 
       icon: RiCalendarEventLine, 
@@ -131,11 +131,13 @@ export const Sidebar: React.FC = () => {
           {/* Mobile Drawer Header */}
           <div className="flex items-center justify-between px-2.5 py-2">
             <div className="flex items-center gap-2.5">
-              <div className="h-7 w-7 rounded-lg bg-primary flex items-center justify-center shadow-md shadow-primary/25">
-                <RiSparklingFill className="h-4 w-4 text-primary-foreground" />
-              </div>
+              <img
+                src="/logo.png"
+                alt="MeetingOS Logo"
+                className="h-7 w-7 rounded-lg object-contain shadow-md shadow-primary/20 shrink-0"
+              />
               <div className="flex flex-col">
-                <span className="font-semibold text-sm tracking-tight text-foreground leading-none">
+                <span className="font-bold text-sm tracking-tight text-foreground leading-none">
                   MeetingOS
                 </span>
                 <span className="text-[10px] text-muted-foreground mt-0.5 font-medium tracking-wide uppercase">
@@ -143,6 +145,7 @@ export const Sidebar: React.FC = () => {
                 </span>
               </div>
             </div>
+
             <button
               type="button"
               onClick={closeMobile}
@@ -200,16 +203,19 @@ export const Sidebar: React.FC = () => {
             )}
           >
             <div className="flex items-center gap-2.5">
-              <div
-                className="h-7 w-7 rounded-lg bg-primary flex items-center justify-center shadow-md shadow-primary/25 cursor-pointer shrink-0"
+              <img
+                src="/logo.png"
+                alt="MeetingOS Logo"
+                className={cn(
+                  'rounded-lg object-contain shadow-md shadow-primary/20 cursor-pointer shrink-0 transition-all',
+                  isCollapsed ? 'h-8 w-8 hover:scale-105' : 'h-7 w-7'
+                )}
                 onClick={toggleCollapse}
                 title={isCollapsed ? 'Expand sidebar' : 'MeetingOS'}
-              >
-                <RiSparklingFill className="h-4 w-4 text-primary-foreground" />
-              </div>
+              />
               {!isCollapsed && (
                 <div className="flex flex-col">
-                  <span className="font-semibold text-sm tracking-tight text-foreground leading-none">
+                  <span className="font-bold text-sm tracking-tight text-foreground leading-none">
                     MeetingOS
                   </span>
                   <span className="text-[10px] text-muted-foreground mt-0.5 font-medium tracking-wide uppercase">
@@ -218,6 +224,7 @@ export const Sidebar: React.FC = () => {
                 </div>
               )}
             </div>
+
 
             <button
               type="button"

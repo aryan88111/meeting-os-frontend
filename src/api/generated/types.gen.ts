@@ -97,7 +97,7 @@ export type CreateMeetingDto = {
      */
     title: string;
     description?: string;
-    provider?: 'MANUAL' | 'GOOGLE_MEET' | 'MICROSOFT_TEAMS' | 'ZOOM';
+    provider?: 'MANUAL' | 'GOOGLE_MEET' | 'MICROSOFT_TEAMS' | 'ZOOM' | 'MEETINGOS_ROOM';
     /**
      * Direct meeting join URL
      */
@@ -127,7 +127,7 @@ export type UpdateMeetingDto = {
      */
     title?: string;
     description?: string;
-    provider?: 'MANUAL' | 'GOOGLE_MEET' | 'MICROSOFT_TEAMS' | 'ZOOM';
+    provider?: 'MANUAL' | 'GOOGLE_MEET' | 'MICROSOFT_TEAMS' | 'ZOOM' | 'MEETINGOS_ROOM';
     /**
      * Direct meeting join URL
      */
@@ -220,6 +220,59 @@ export type CreateApiKeyDto = {
      * Optional expiration in days (e.g., 30, 90, 365)
      */
     expiresInDays?: number;
+};
+
+export type GenerateRoomTokenDto = {
+    /**
+     * Custom participant display name
+     */
+    participantName?: string;
+    /**
+     * Whether the participant can publish camera and microphone
+     */
+    canPublish?: boolean;
+    /**
+     * Whether the participant can share their screen
+     */
+    canPublishData?: boolean;
+};
+
+export type IngestLiveCaptionDto = {
+    /**
+     * Speaker participant identity or user ID
+     */
+    speakerId: string;
+    /**
+     * Speaker display name
+     */
+    speakerName: string;
+    /**
+     * Transcribed text segment
+     */
+    text: string;
+    /**
+     * Start time offset in milliseconds from call start
+     */
+    startTimeMs?: number;
+    /**
+     * End time offset in milliseconds from call start
+     */
+    endTimeMs?: number;
+    /**
+     * Whether this is an interim (real-time stream) or final segment
+     */
+    isInterim?: boolean;
+    /**
+     * Confidence score between 0.0 and 1.0
+     */
+    confidence?: number;
+};
+
+export type EndCallDto = {
+    /**
+     * Reason for terminating the call session
+     */
+    reason?: string;
 };
 
 export type AuthControllerRegisterData = {
@@ -382,6 +435,65 @@ export type IntegrationsControllerPushMeetingToGoogleCalendarData = {
 };
 
 export type IntegrationsControllerPushMeetingToGoogleCalendarResponses = {
+    200: unknown;
+};
+
+export type IntegrationsControllerGetMicrosoftAuthUrlData = {
+    body?: never;
+    path?: never;
+    query?: {
+        redirectUri?: string;
+    };
+    url: '/api/v1/integrations/microsoft/auth-url';
+};
+
+export type IntegrationsControllerGetMicrosoftAuthUrlResponses = {
+    200: unknown;
+};
+
+export type IntegrationsControllerHandleMicrosoftCallbackData = {
+    body: GoogleAuthCallbackDto;
+    path?: never;
+    query?: never;
+    url: '/api/v1/integrations/microsoft/callback';
+};
+
+export type IntegrationsControllerHandleMicrosoftCallbackResponses = {
+    200: unknown;
+};
+
+export type IntegrationsControllerSyncMicrosoftCalendarData = {
+    body?: never;
+    path?: never;
+    query?: never;
+    url: '/api/v1/integrations/microsoft/sync';
+};
+
+export type IntegrationsControllerSyncMicrosoftCalendarResponses = {
+    200: unknown;
+};
+
+export type IntegrationsControllerSyncMicrosoftTeamsTranscriptData = {
+    body?: never;
+    path: {
+        meetingId: string;
+    };
+    query?: never;
+    url: '/api/v1/integrations/microsoft/sync-transcript/{meetingId}';
+};
+
+export type IntegrationsControllerSyncMicrosoftTeamsTranscriptResponses = {
+    200: unknown;
+};
+
+export type IntegrationsControllerScanRecentMicrosoftTranscriptsData = {
+    body?: never;
+    path?: never;
+    query?: never;
+    url: '/api/v1/integrations/microsoft/scan-transcripts';
+};
+
+export type IntegrationsControllerScanRecentMicrosoftTranscriptsResponses = {
     200: unknown;
 };
 
@@ -845,6 +957,119 @@ export type ApiKeysControllerDeleteKeyData = {
 };
 
 export type ApiKeysControllerDeleteKeyResponses = {
+    200: unknown;
+};
+
+export type VideoRoomsControllerGenerateTokenData = {
+    body: GenerateRoomTokenDto;
+    path: {
+        meetingId: string;
+    };
+    query?: never;
+    url: '/api/v1/video-rooms/{meetingId}/token';
+};
+
+export type VideoRoomsControllerGenerateTokenResponses = {
+    /**
+     * LiveKit access token and connection credentials
+     */
+    200: unknown;
+};
+
+export type VideoRoomsControllerGenerateGuestTokenData = {
+    body?: never;
+    path: {
+        meetingId: string;
+    };
+    query?: never;
+    url: '/api/v1/video-rooms/{meetingId}/guest-token';
+};
+
+export type VideoRoomsControllerGenerateGuestTokenResponses = {
+    /**
+     * LiveKit guest token and connection credentials
+     */
+    200: unknown;
+};
+
+export type VideoRoomsControllerAddParticipantData = {
+    body?: never;
+    path: {
+        meetingId: string;
+    };
+    query?: never;
+    url: '/api/v1/video-rooms/{meetingId}/participants';
+};
+
+export type VideoRoomsControllerAddParticipantResponses = {
+    /**
+     * Participant added successfully
+     */
+    201: unknown;
+};
+
+export type VideoRoomsControllerGetStatusData = {
+    body?: never;
+    path: {
+        meetingId: string;
+    };
+    query?: never;
+    url: '/api/v1/video-rooms/{meetingId}/status';
+};
+
+export type VideoRoomsControllerGetStatusResponses = {
+    /**
+     * Room status and active session info
+     */
+    200: unknown;
+};
+
+export type VideoRoomsControllerIngestCaptionData = {
+    body: IngestLiveCaptionDto;
+    path: {
+        meetingId: string;
+    };
+    query?: never;
+    url: '/api/v1/video-rooms/{meetingId}/caption';
+};
+
+export type VideoRoomsControllerIngestCaptionResponses = {
+    /**
+     * Caption ingested and persisted
+     */
+    200: unknown;
+};
+
+export type VideoRoomsControllerEndCallData = {
+    body: EndCallDto;
+    path: {
+        meetingId: string;
+    };
+    query?: never;
+    url: '/api/v1/video-rooms/{meetingId}/end';
+};
+
+export type VideoRoomsControllerEndCallResponses = {
+    /**
+     * Call terminated and intelligence extraction enqueued
+     */
+    200: unknown;
+};
+
+export type LivekitWebhookControllerHandleWebhookData = {
+    body?: never;
+    headers: {
+        authorization: string;
+    };
+    path?: never;
+    query?: never;
+    url: '/api/v1/video-rooms/webhook';
+};
+
+export type LivekitWebhookControllerHandleWebhookResponses = {
+    /**
+     * Webhook processed
+     */
     200: unknown;
 };
 

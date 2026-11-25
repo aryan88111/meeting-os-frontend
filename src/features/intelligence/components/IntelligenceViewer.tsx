@@ -588,8 +588,9 @@ export const IntelligenceViewer: React.FC = () => {
     );
   }
 
-  const latestTranscript = meeting.transcripts?.[0];
-  const segments = latestTranscript?.segments || [];
+  const segments = (meeting.transcripts?.flatMap((t) => t.segments || []) || []).sort(
+    (a, b) => (Number(a.sequence) || 0) - (Number(b.sequence) || 0)
+  );
   const latestSummary = meeting.summaries?.[0];
 
   const filteredSegments = segments.filter(

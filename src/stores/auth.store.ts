@@ -66,13 +66,29 @@ export function normalizeAuthError(err: any): string {
 }
 
 const TOKEN_KEY = 'meetingos_auth_token';
+const USER_KEY = 'meetingos_user_profile';
+const ORG_KEY = 'meetingos_current_org';
+
+const getStoredJSON = <T>(key: string): T | null => {
+  if (typeof window === 'undefined') return null;
+  try {
+    const raw = localStorage.getItem(key);
+    return raw ? JSON.parse(raw) : null;
+  } catch {
+    return null;
+  }
+};
+
+const initialToken = typeof window !== 'undefined' ? localStorage.getItem(TOKEN_KEY) : null;
+const initialUser = getStoredJSON<UserProfile>(USER_KEY);
+const initialOrg = getStoredJSON<OrganizationInfo>(ORG_KEY);
 
 export const useAuthStore = create<AuthState>((set, get) => ({
-  user: null,
-  currentOrganization: null,
-  organizations: [],
-  token: typeof window !== 'undefined' ? localStorage.getItem(TOKEN_KEY) : null,
-  isAuthenticated: !!(typeof window !== 'undefined' && localStorage.getItem(TOKEN_KEY)),
+  user: initialUser,
+  currentOrganization: initialOrg,
+  organizations: initialOrg ? [initialOrg] : [],
+  token: initialToken,
+  isAuthenticated: !!initialToken,
   isLoading: false,
   error: null,
 
@@ -96,6 +112,9 @@ export const useAuthStore = create<AuthState>((set, get) => ({
       }
 
       localStorage.setItem(TOKEN_KEY, data.token);
+      if (data.user) localStorage.setItem(USER_KEY, JSON.stringify(data.user));
+      if (data.currentOrganization) localStorage.setItem(ORG_KEY, JSON.stringify(data.currentOrganization));
+
       set({
         token: data.token,
         user: data.user,
@@ -130,6 +149,9 @@ export const useAuthStore = create<AuthState>((set, get) => ({
       }
 
       localStorage.setItem(TOKEN_KEY, data.token);
+      if (data.user) localStorage.setItem(USER_KEY, JSON.stringify(data.user));
+      if (data.currentOrganization) localStorage.setItem(ORG_KEY, JSON.stringify(data.currentOrganization));
+
       set({
         token: data.token,
         user: data.user,
@@ -219,6 +241,8 @@ export const useAuthStore = create<AuthState>((set, get) => ({
       }
 
       localStorage.setItem(TOKEN_KEY, data.token);
+      if (data.user) localStorage.setItem(USER_KEY, JSON.stringify(data.user));
+      if (data.currentOrganization) localStorage.setItem(ORG_KEY, JSON.stringify(data.currentOrganization));
       set({
         token: data.token,
         user: data.user,
@@ -249,17 +273,25 @@ export const useAuthStore = create<AuthState>((set, get) => ({
         const res = response.response as Response;
         if (res && res.status === 401) {
           localStorage.removeItem(TOKEN_KEY);
-          set({ token: null, user: null, isAuthenticated: false });
+          localStorage.removeItem(USER_KEY);
+          localStorage.removeItem(ORG_KEY);
+          set({ token: null, user: null, currentOrganization: null, organizations: [], isAuthenticated: false });
         }
         return;
       }
 
       const data = response.data as any;
       if (data) {
+        const userObj: UserProfile = { id: data.id, email: data.email, name: data.name };
+        const orgObj: OrganizationInfo | null = data.organizations?.[0] || null;
+        localStorage.setItem(USER_KEY, JSON.stringify(userObj));
+        if (orgObj) {
+          localStorage.setItem(ORG_KEY, JSON.stringify(orgObj));
+        }
         set({
-          user: { id: data.id, email: data.email, name: data.name },
+          user: userObj,
           organizations: data.organizations || [],
-          currentOrganization: data.organizations?.[0] || null,
+          currentOrganization: orgObj,
           isAuthenticated: true,
         });
       }
@@ -277,6 +309,8 @@ export const useAuthStore = create<AuthState>((set, get) => ({
       await supabase.auth.signOut().catch(() => {});
     } finally {
       localStorage.removeItem(TOKEN_KEY);
+      localStorage.removeItem(USER_KEY);
+      localStorage.removeItem(ORG_KEY);
       set({
         user: null,
         currentOrganization: null,
