@@ -172,7 +172,11 @@ export const useAuthStore = create<AuthState>((set, get) => ({
     set({ isLoading: true, error: null });
     try {
       sessionStorage.setItem('pending_oauth_provider', provider);
-      const redirectUrl = `${window.location.origin}/oauth/callback`;
+      const envAppUrl = (import.meta.env.VITE_APP_URL || '').trim().replace(/\/+$/, '');
+      const isLocalHost =
+        window.location.hostname === 'localhost' || window.location.hostname === '127.0.0.1';
+      const appOrigin = !isLocalHost && envAppUrl ? envAppUrl : window.location.origin.replace(/\/+$/, '');
+      const redirectUrl = `${appOrigin}/oauth/callback`;
       const scopes =
         provider === 'google'
           ? 'https://www.googleapis.com/auth/calendar.events https://www.googleapis.com/auth/calendar https://www.googleapis.com/auth/drive.readonly https://www.googleapis.com/auth/userinfo.email https://www.googleapis.com/auth/userinfo.profile'

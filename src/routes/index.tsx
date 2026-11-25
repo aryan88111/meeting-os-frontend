@@ -19,6 +19,28 @@ import { IntegrationsView } from '@/features/integrations/components/Integration
 import { GoogleCallbackView } from '@/features/integrations/components/GoogleCallbackView';
 import { VideoCallRoom } from '@/features/video-call';
 
+/**
+ * Fallback root handler: if an OAuth provider/Supabase ever lands on `/` with
+ * token fragments or authorization codes instead of `/oauth/callback`, hand off
+ * seamlessly to AuthCallback rather than rendering the marketing landing page.
+ */
+const RootRoute: React.FC = () => {
+  const hash = typeof window !== 'undefined' ? window.location.hash : '';
+  const search = typeof window !== 'undefined' ? window.location.search : '';
+  const hashParams = new URLSearchParams(hash.startsWith('#') ? hash.slice(1) : hash);
+  const searchParams = new URLSearchParams(search);
+
+  const hasOAuthPayload =
+    hashParams.has('access_token') ||
+    hashParams.has('refresh_token') ||
+    hashParams.has('provider_token') ||
+    hashParams.has('error_description') ||
+    searchParams.has('code') ||
+    searchParams.has('error_description');
+
+  return hasOAuthPayload ? <AuthCallback /> : <LandingPageView />;
+};
+
 export const router = createBrowserRouter([
   // Fullscreen WebRTC SFU Video Call Room
   {
@@ -34,11 +56,10 @@ export const router = createBrowserRouter([
     element: <VideoCallRoom />,
   },
 
-  // Public Landing Page
-
+  // Public Landing Page (with OAuth callback fallback)
   {
     path: '/',
-    element: <LandingPageView />,
+    element: <RootRoute />,
   },
   // Public Auth Pages
   {
